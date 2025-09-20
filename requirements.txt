@@ -9,3 +9,4 @@ google-generativeai
 fastapi
 uvicorn
 perception
+python-multipart

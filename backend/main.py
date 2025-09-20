@@ -18,7 +18,12 @@ from agents.book_bot_agent import BookBotAgent
 from pathlib import Path
 
 
-import config
+try:
+    # When running as a package module (e.g., `uvicorn backend.main:app`)
+    from . import config  # type: ignore
+except Exception:
+    # When running as a script from backend/ (e.g., `python main.py`)
+    import config  # type: ignore
 
 # --- Import all agent files dynamically ---
 import importlib
@@ -27,7 +32,8 @@ import pkgutil
 
 def get_all_agents():
     agents = {}
-    gemini_api_key = "AIzaSyBVfwtxBbyVpLfEYY5naJCbBkIY4nhV3X8"
+    # Prefer environment-provided key; fall back to empty string if not set.
+    gemini_api_key = config.GEMINI_API_KEY or ""
     doc_processor = DocumentProcessor()
     agent_pkg = "agents"
 
@@ -277,7 +283,8 @@ if __name__ == "__main__":
         with open(os.path.join(dir_name, "__init__.py"), "w") as f:
             pass
     # Run FastAPI server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use config-driven host/port if provided
+    uvicorn.run(app, host=config.UVICORN_HOST, port=config.UVICORN_PORT)
     # Optionally, keep CLI for local testing
     # main()
 
