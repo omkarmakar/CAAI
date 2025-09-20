@@ -1,0 +1,11 @@
+transformers
+torch
+tensorflow
+scikit-learn
+Pillow
+pytesseract
+PyMuPDF
+google-generativeai
+fastapi
+uvicorn
+perception

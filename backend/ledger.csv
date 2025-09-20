@@ -1,0 +1,7 @@
+invoice_no,invoice_date,item_name,details,qty,unit_price,gst_rate,is_interstate
+1001,2025-01-02,Salary,January payroll,1,50000,0,False
+1002,2025-01-05,Rent,Office rent for Jan,1,15000,0,False
+1003,2025-01-08,Stationery,Pens and notebooks,10,120,0,False
+1004,2025-01-10,Client Payment,Invoice #2025-07,1,20000,18,True
+1005,2025-01-12,Electricity,Office electricity bill,1,3000,0,False
+1006,2025-01-15,Software,Accounting tool subscription,1,7000,18,False
