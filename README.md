@@ -78,6 +78,13 @@ npm start
 
 Backend health check: opening http://localhost:8000 returns a small JSON if the backend is running.
 
+### What’s in the dashboard
+
+- Overview: shows total/active/inactive agents, backend health/time, and a live Agent Metrics table (executions, errors, last activity).
+- AI Agents: toggle agents on/off and run actions with typed forms; results render as tables, KPI cards, or JSON.
+- Data Analytics: interactive charts for sales and purchases trends and GST rate distributions (powered by Recharts).
+- Recent Activity: timeline of agent activation and execution events (auto-refreshes periodically).
+
 ## API overview (for reference)
 
 - GET /agents → List agents with actions and `active` state
@@ -85,6 +92,14 @@ Backend health check: opening http://localhost:8000 returns a small JSON if the 
 - POST /agents/execute → Execute an action
   - Body: `{ "agent": "AgentName", "action": "action_name", "params": { ... } }`
 - POST /upload → Upload a file (returns `{ path: "backend/uploaded_files/<filename>" }`)
+
+Additional endpoints used by the dashboard:
+
+- GET /overview → `{ total_agents, active_agents, inactive_agents, health: { backend, time } }`
+- GET /agents/metrics → `{ metrics: [{ name, active, executions, errors, last_ts }] }`
+- GET /activity?limit=50 → `{ events: [{ ts, type: 'agent_activation'|'agent_execute', ... }] }`
+- GET /data/sales → `{ total, trend: [{date,value}], rate_dist: [{rate,count}], rows: [...] }`
+- GET /data/purchases → same shape as sales
 
 ## Repo structure
 
@@ -106,6 +121,7 @@ Backend health check: opening http://localhost:8000 returns a small JSON if the 
 - Activation state is persisted in `backend/output/activation.json`.
 - `.gitignore` excludes virtualenvs, node_modules, build artifacts, uploads, and generated outputs.
 - You can run the backend with `python main.py` as well, but `uvicorn` is recommended during development.
+- Charts: the dashboard uses Recharts (already in `frontend-next/package.json`). Run `npm install` before `npm run dev`.
 
 Enjoy building with CAAI! 👩‍💻👨‍💻
 

@@ -1,5 +1,9 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react'
+import {
+  LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, BarChart, Bar
+} from 'recharts'
 import styles from './page.module.css'
 
 // Configure backend origin (default to same host:8000 assumption)
@@ -27,6 +31,10 @@ type AgentMeta = {
 }
 
 export default function Page() {
+  // Tabs
+  type Tab = 'overview'|'agents'|'analytics'|'activity'
+  const [tab, setTab] = useState<Tab>('overview')
+
   const [agents, setAgents] = useState<Record<string, AgentMeta>>({})
   const [loading, setLoading] = useState(false)
   const [current, setCurrent] = useState<{ name: string|null; action: string|null }>({ name: null, action: null })
@@ -34,6 +42,13 @@ export default function Page() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string|null>(null)
   const [toggling, setToggling] = useState<Record<string, boolean>>({})
+
+  // Overview / Metrics / Activity / Analytics state
+  const [overview, setOverview] = useState<any>(null)
+  const [metrics, setMetrics] = useState<{ metrics: { name: string; active: boolean; executions: number; errors: number; last_ts?: string|null }[] } | null>(null)
+  const [activity, setActivity] = useState<{ events: any[] } | null>(null)
+  const [salesData, setSalesData] = useState<any>(null)
+  const [purchasesData, setPurchasesData] = useState<any>(null)
 
   const currentMeta = useMemo(() => current.name ? agents[current.name] : undefined, [agents, current])
   const currentAction = useMemo(() => (currentMeta && current.action) ? currentMeta.actions[current.action] : undefined, [currentMeta, current])
@@ -49,6 +64,33 @@ export default function Page() {
   }
 
   useEffect(() => { fetchAgents() }, [])
+
+  // Fetch helpers for new tabs
+  async function fetchOverview() {
+    try { const r = await fetch(`${BACKEND}/overview`); setOverview(await r.json()) } catch {}
+  }
+  async function fetchMetrics() {
+    try { const r = await fetch(`${BACKEND}/agents/metrics`); setMetrics(await r.json()) } catch {}
+  }
+  async function fetchActivity() {
+    try { const r = await fetch(`${BACKEND}/activity?limit=100`); setActivity(await r.json()) } catch {}
+  }
+  async function fetchAnalytics() {
+    try {
+      const [s, p] = await Promise.all([
+        fetch(`${BACKEND}/data/sales`).then(r => r.json()),
+        fetch(`${BACKEND}/data/purchases`).then(r => r.json())
+      ])
+      setSalesData(s); setPurchasesData(p)
+    } catch {}
+  }
+
+  // Initial load for overview/metrics/activity/analytics
+  useEffect(() => {
+    fetchOverview(); fetchMetrics(); fetchActivity(); fetchAnalytics()
+    const id = setInterval(() => { fetchOverview(); fetchMetrics(); fetchActivity() }, 30000)
+    return () => clearInterval(id)
+  }, [])
 
   async function setActive(name: string, active: boolean) {
     // Optimistic update and disable while in-flight
@@ -100,9 +142,21 @@ export default function Page() {
         <h1>CA AI Agent Dashboard</h1>
         <span className={styles.status}>Backend: {Object.keys(agents).length ? 'online' : 'connecting…'}</span>
       </header>
+      <div className={styles.tabs}>
+        {renderTab('overview', 'Overview', tab, setTab)}
+        {renderTab('agents', 'AI Agents', tab, setTab)}
+        {renderTab('analytics', 'Data Analytics', tab, setTab)}
+        {renderTab('activity', 'Recent Activity', tab, setTab)}
+      </div>
       <main className={styles.main}>
-        <section className={styles.agents}>
-          {Object.entries(agents as Record<string, AgentMeta>).map(([name, meta]) => (
+        {tab === 'overview' && (
+          <OverviewPanel overview={overview} metrics={metrics} />
+        )}
+
+        {tab === 'agents' && (
+        <div className={styles.row}>
+          <section className={styles.agents}>
+            {Object.entries(agents as Record<string, AgentMeta>).map(([name, meta]) => (
             <div key={name} className={styles.card}>
               <div className={styles.cardTitle}>{meta.display || name}</div>
               {meta.hint && <div className={styles.hint}>{meta.hint}</div>}
@@ -113,70 +167,89 @@ export default function Page() {
                 </label>
                 <button className={styles.btn} disabled={!meta.active} onClick={() => { if (!agents[name]?.active) return; setCurrent({ name, action: null }); setFormState({}); setResult(null); setError(null); }}>Open</button>
               </div>
-            </div>
-          ))}
-        </section>
-
-        <section className={styles.panel}>
-          <h2>{currentMeta ? (currentMeta.display || current.name) : 'Select an active agent'}</h2>
-          {currentMeta && (
-            <div className={styles.actionsList}>
-              {Object.entries(currentMeta.actions || {}).map(([action, info]) => (
-                <div key={action}
-                     className={`${styles.pill} ${current.action===action ? styles.pillActive : ''}`}
-                     onClick={() => { setCurrent(c => ({ ...c, action })); setFormState({}); setResult(null); setError(null); }}>
-                  {info.label || action}
+              {/* Tiny metrics for the agent */}
+              {metrics && (
+                <div className={styles.subtle}>
+                  {(() => {
+                    const m = metrics.metrics.find(x => x.name === name)
+                    if (!m) return null
+                    return <span>Exec: {m.executions} · Err: {m.errors} {m.last_ts ? `· Last: ${new Date(m.last_ts).toLocaleString()}` : ''}</span>
+                  })()}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+            ))}
+          </section>
+          <section className={styles.panel}>
+            <h2>{currentMeta ? (currentMeta.display || current.name) : 'Select an active agent'}</h2>
+            {currentMeta && (
+              <div className={styles.actionsList}>
+                {Object.entries(currentMeta.actions || {}).map(([action, info]) => (
+                  <div key={action}
+                       className={`${styles.pill} ${current.action===action ? styles.pillActive : ''}`}
+                       onClick={() => { setCurrent(c => ({ ...c, action })); setFormState({}); setResult(null); setError(null); }}>
+                    {info.label || action}
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {currentAction && (
-            <div className={styles.formGrid}>
-              {(currentAction.params || []).map((p) => (
-                <div key={p.name} className={styles.formRow}>
-                  <label>{p.label || p.name}</label>
-                  {p.type === 'file' && (
-                    <input type="file" onChange={async (e) => {
-                      const f = e.target.files?.[0]; if (!f) return;
-                      const up = await onUpload(f); onParamChange(p, up.path);
-                    }} />
-                  )}
-                  {p.type === 'files' && (
-                    <input type="file" multiple onChange={async (e) => {
-                      const files = Array.from(e.target.files || []);
-                      const paths: string[] = []
-                      for (const f of files) { const up = await onUpload(f); paths.push(up.path); }
-                      onParamChange(p, paths)
-                    }} />
-                  )}
-                  {p.type === 'select' && (
-                    <select onChange={e => onParamChange(p, e.target.value)}>
-                      {(p.options||[]).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  )}
-                  {p.type === 'number' && (
-                    <input type="number" onChange={e => onParamChange(p, parseFloat(e.target.value))} />
-                  )}
-                  {p.type === 'text' && (
-                    <textarea rows={3} placeholder={p.placeholder||''} onChange={e => onParamChange(p, e.target.value)} />
-                  )}
-                  {/* default string */}
-                  {(!['file','files','select','number','text'].includes(p.type)) && (
-                    <input type="text" placeholder={p.placeholder||''} onChange={e => onParamChange(p, e.target.value)} />
-                  )}
-                </div>
-              ))}
-              <button className={styles.runBtn} onClick={run} disabled={loading}>{loading ? 'Running…' : 'Run'}</button>
+            {currentAction && (
+              <div className={styles.formGrid}>
+                {(currentAction.params || []).map((p) => (
+                  <div key={p.name} className={styles.formRow}>
+                    <label>{p.label || p.name}</label>
+                    {p.type === 'file' && (
+                      <input type="file" onChange={async (e) => {
+                        const f = e.target.files?.[0]; if (!f) return;
+                        const up = await onUpload(f); onParamChange(p, up.path);
+                      }} />
+                    )}
+                    {p.type === 'files' && (
+                      <input type="file" multiple onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        const paths: string[] = []
+                        for (const f of files) { const up = await onUpload(f); paths.push(up.path); }
+                        onParamChange(p, paths)
+                      }} />
+                    )}
+                    {p.type === 'select' && (
+                      <select onChange={e => onParamChange(p, e.target.value)}>
+                        {(p.options||[]).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    )}
+                    {p.type === 'number' && (
+                      <input type="number" onChange={e => onParamChange(p, parseFloat(e.target.value))} />
+                    )}
+                    {p.type === 'text' && (
+                      <textarea rows={3} placeholder={p.placeholder||''} onChange={e => onParamChange(p, e.target.value)} />
+                    )}
+                    {/* default string */}
+                    {(!['file','files','select','number','text'].includes(p.type)) && (
+                      <input type="text" placeholder={p.placeholder||''} onChange={e => onParamChange(p, e.target.value)} />
+                    )}
+                  </div>
+                ))}
+                <button className={styles.runBtn} onClick={run} disabled={loading}>{loading ? 'Running…' : 'Run'}</button>
+              </div>
+            )}
+
+            {/* Result */}
+            <div className={styles.result}>
+              {error && <div className={styles.errorBox}>{error}</div>}
+              {result && <RichResult agent={current.name!} action={current.action!} data={result} />}
             </div>
-          )}
+          </section>
+        </div>
+        )}
 
-          {/* Result */}
-          <div className={styles.result}>
-            {error && <div className={styles.errorBox}>{error}</div>}
-            {result && <RichResult agent={current.name!} action={current.action!} data={result} />}
-          </div>
-        </section>
+        {tab === 'analytics' && (
+          <AnalyticsPanel sales={salesData} purchases={purchasesData} />
+        )}
+
+        {tab === 'activity' && (
+          <ActivityPanel activity={activity} />
+        )}
       </main>
       <footer className={styles.footer}><small>Tip: Toggle agents on/off. Click an active agent to view actions.</small></footer>
     </div>
@@ -364,5 +437,124 @@ function BarList({ items, labelKey, valueKey }: { items: any[]; labelKey: string
         </div>
       ))}
     </div>
+  )
+}
+
+function renderTab(key: string, label: string, active: string, setActiveTab: (t: any) => void) {
+  const is = active === key
+  return (
+    <div className={`${styles.tab} ${is ? styles.tabActive : ''}`} onClick={() => setActiveTab(key)}>{label}</div>
+  )
+}
+
+function OverviewPanel({ overview, metrics }: { overview: any; metrics: any }) {
+  return (
+    <section className={styles.grid}>
+      <div className={styles.kpiCard}><div className={styles.kpiTitle}>Total Agents</div><div className={styles.kpiBig}>{overview?.total_agents ?? '-'}</div></div>
+      <div className={styles.kpiCard}><div className={styles.kpiTitle}>Active</div><div className={styles.kpiBig} style={{color:'#2fb36e'}}>{overview?.active_agents ?? '-'}</div></div>
+      <div className={styles.kpiCard}><div className={styles.kpiTitle}>Inactive</div><div className={styles.kpiBig} style={{color:'#ffadad'}}>{overview?.inactive_agents ?? '-'}</div></div>
+      <div className={styles.kpiCard}><div className={styles.kpiTitle}>Health</div><div className={styles.kpiSmall}>{overview?.health?.backend||'?'}</div><div className={styles.kpiTiny}>{overview?.health?.time ? new Date(overview.health.time).toLocaleString() : ''}</div></div>
+
+      <div className={styles.card} style={{gridColumn:'1 / -1'}}>
+        <div className={styles.cardTitle}>Agent Metrics</div>
+        {metrics?.metrics?.length ? (
+          <Table rows={metrics.metrics} />
+        ) : (<div className={styles.subtle}>No metrics yet</div>)}
+      </div>
+    </section>
+  )
+}
+
+function AnalyticsPanel({ sales, purchases }: { sales: any; purchases: any }) {
+  return (
+    <section className={styles.grid2}>
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Sales Trend</div>
+        <div className={styles.chart}>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={sales?.trend || []} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
+              <CartesianGrid stroke="#22305c" />
+              <XAxis dataKey="date" stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#2fb36e" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <KPI pairs={[["Total Sales", sales?.total ?? 0]] as any} />
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Sales GST Rate Distribution</div>
+        <div className={styles.chart}>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={sales?.rate_dist || []}>
+              <CartesianGrid stroke="#22305c" />
+              <XAxis dataKey="rate" stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#2b8fff" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Purchases Trend</div>
+        <div className={styles.chart}>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={purchases?.trend || []} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
+              <CartesianGrid stroke="#22305c" />
+              <XAxis dataKey="date" stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#ffad3d" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <KPI pairs={[["Total Purchases", purchases?.total ?? 0]] as any} />
+      </div>
+
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Purchases GST Rate Distribution</div>
+        <div className={styles.chart}>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={purchases?.rate_dist || []}>
+              <CartesianGrid stroke="#22305c" />
+              <XAxis dataKey="rate" stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#9aa5d1" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#ab6fff" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ActivityPanel({ activity }: { activity: { events: any[] } | null }) {
+  const events = activity?.events || []
+  return (
+    <section className={styles.card}>
+      <div className={styles.cardTitle}>Recent Activity</div>
+      {events.length === 0 ? <div className={styles.subtle}>No events yet</div> : (
+        <div className={styles.timeline}>
+          {events.map((e, idx) => (
+            <div key={idx} className={styles.timelineItem}>
+              <div className={styles.timelineMeta}>{e.ts ? new Date(e.ts).toLocaleString() : ''}</div>
+              <div className={styles.timelineBody}>
+                {e.type === 'agent_activation' && (
+                  <div>Agent <b>{e.agent}</b> set to <b>{String(e.active)}</b></div>
+                )}
+                {e.type === 'agent_execute' && (
+                  <div>Execute <b>{e.agent}</b>/<code>{e.action}</code> → <b>{e.status}</b>{e.error ? ` (${e.error})` : ''}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

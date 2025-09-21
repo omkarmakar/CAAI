@@ -18,6 +18,7 @@ from agents.tax_bot_agent import TaxBot
 from agents.compliance_check_agent import ComplianceCheckAgent
 from agents.book_bot_agent import BookBotAgent
 from pathlib import Path
+from datetime import datetime
 
 
 try:
@@ -104,6 +105,7 @@ core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))
 ACTIVATION_FILE = os.path.join("output", "activation.json")
 os.makedirs("output", exist_ok=True)
 ACTIVATED_AGENTS = {name: True for name in available_agents.keys()}
+ACTIVITY_FILE = os.path.join("output", "activity.log.jsonl")
 
 def _load_activation_state():
     try:
@@ -127,6 +129,15 @@ def _persist_activation_state():
         pass
 
 _load_activation_state()
+
+def _log_activity(event: dict):
+    try:
+        event = dict(event or {})
+        event.setdefault("ts", datetime.utcnow().isoformat() + "Z")
+        with open(ACTIVITY_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def get_agent_metadata():
@@ -320,6 +331,118 @@ def get_agent_metadata():
         meta[name]["active"] = ACTIVATED_AGENTS.get(name, True)
     return meta
 
+def _safe_float(x, default=0.0):
+    try:
+        return float(x)
+    except Exception:
+        return default
+
+def _read_csv_rows(csv_path: str):
+    rows = []
+    if not os.path.isfile(csv_path):
+        return rows
+    try:
+        import csv
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append(r)
+    except Exception:
+        pass
+    return rows
+
+@app.get("/overview")
+def get_overview():
+    """High-level overview: counts, active/inactive, sample health info."""
+    agents_meta = get_agent_metadata()
+    total = len(agents_meta)
+    active = sum(1 for a in agents_meta.values() if a.get("active"))
+    inactive = total - active
+    health = {"backend": "ok", "time": datetime.utcnow().isoformat() + "Z"}
+    return {"total_agents": total, "active_agents": active, "inactive_agents": inactive, "health": health}
+
+@app.get("/activity")
+def get_activity(limit: int = 50):
+    """Return the most recent activity events (JSONL file)."""
+    events = []
+    try:
+        if os.path.isfile(ACTIVITY_FILE):
+            with open(ACTIVITY_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        events.append(json.loads(line))
+                    except Exception:
+                        pass
+        events = events[-limit:]
+    except Exception:
+        events = []
+    return {"events": events[::-1]}
+
+@app.get("/agents/metrics")
+def get_agents_metrics():
+    """Aggregate per-agent metrics from activity log and current activation state."""
+    agents_meta = get_agent_metadata()
+    agg = {name: {"name": name, "active": bool(meta.get("active")), "executions": 0, "errors": 0, "last_ts": None} for name, meta in agents_meta.items()}
+    try:
+        if os.path.isfile(ACTIVITY_FILE):
+            with open(ACTIVITY_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    if ev.get("type") == "agent_execute":
+                        nm = ev.get("agent")
+                        if nm in agg:
+                            if ev.get("status") == "success":
+                                agg[nm]["executions"] += 1
+                            if ev.get("status") == "error":
+                                agg[nm]["errors"] += 1
+                            agg[nm]["last_ts"] = ev.get("ts") or agg[nm]["last_ts"]
+    except Exception:
+        pass
+    return {"metrics": list(agg.values())}
+
+@app.get("/data/sales")
+def data_sales(path: str | None = Query(default=None)):
+    csv_path = path if (path and os.path.isfile(path)) else "sales.csv"
+    rows = _read_csv_rows(csv_path)
+    # Aggregate by date (sum invoice_value) and GST rate counts
+    by_date = {}
+    gst_rates = {}
+    total_value = 0.0
+    for r in rows:
+        date = (r.get("invoice_date") or "").strip()
+        val = _safe_float(r.get("invoice_value"))
+        total_value += val
+        by_date[date] = by_date.get(date, 0.0) + val
+        rate = (r.get("gst_rate") or "unknown")
+        gst_rates[rate] = gst_rates.get(rate, 0) + 1
+    trend = sorted([{"date": k, "value": v} for k, v in by_date.items()], key=lambda x: x["date"])
+    rate_dist = sorted([{"rate": str(k), "count": v} for k, v in gst_rates.items()], key=lambda x: x["rate"])
+    return {"total": total_value, "trend": trend, "rate_dist": rate_dist, "rows": rows[:200]}
+
+@app.get("/data/purchases")
+def data_purchases(path: str | None = Query(default=None)):
+    csv_path = path if (path and os.path.isfile(path)) else "purchases.csv"
+    rows = _read_csv_rows(csv_path)
+    by_date = {}
+    gst_rates = {}
+    total_value = 0.0
+    for r in rows:
+        date = (r.get("invoice_date") or "").strip()
+        val = _safe_float(r.get("invoice_value"))
+        total_value += val
+        by_date[date] = by_date.get(date, 0.0) + val
+        rate = (r.get("gst_rate") or "unknown")
+        gst_rates[rate] = gst_rates.get(rate, 0) + 1
+    trend = sorted([{"date": k, "value": v} for k, v in by_date.items()], key=lambda x: x["date"])
+    rate_dist = sorted([{"rate": str(k), "count": v} for k, v in gst_rates.items()], key=lambda x: x["rate"])
+    return {"total": total_value, "trend": trend, "rate_dist": rate_dist, "rows": rows[:200]}
+
 
 def process_command(user_input: str):
     command_parts = shlex.split(user_input)
@@ -439,6 +562,7 @@ async def set_agent_activation(name: str, request: Request, active: bool | None 
             active = not ACTIVATED_AGENTS.get(name, True)
     ACTIVATED_AGENTS[name] = bool(active)
     _persist_activation_state()
+    _log_activity({"type": "agent_activation", "agent": name, "active": ACTIVATED_AGENTS[name]})
     return {"name": name, "active": ACTIVATED_AGENTS[name]}
 
 @app.get("/agents/{name}/status")
@@ -514,10 +638,13 @@ async def execute_agent(request: Request):
     params = _prepare_params_for_execution(agent_name, action, params)
 
     task = {"action": action, "params": params}
+    _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "started"})
     try:
         result = agent.execute(task)
+        _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "success"})
         return result
     except Exception as e:
+        _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "error", "error": str(e)})
         return {"status": "error", "message": str(e)}
 
 
