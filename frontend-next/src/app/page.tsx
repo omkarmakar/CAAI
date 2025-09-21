@@ -453,7 +453,7 @@ function OverviewPanel({ overview, metrics }: { overview: any; metrics: any }) {
       <div className={styles.kpiCard}><div className={styles.kpiTitle}>Total Agents</div><div className={styles.kpiBig}>{overview?.total_agents ?? '-'}</div></div>
       <div className={styles.kpiCard}><div className={styles.kpiTitle}>Active</div><div className={styles.kpiBig} style={{color:'#2fb36e'}}>{overview?.active_agents ?? '-'}</div></div>
       <div className={styles.kpiCard}><div className={styles.kpiTitle}>Inactive</div><div className={styles.kpiBig} style={{color:'#ffadad'}}>{overview?.inactive_agents ?? '-'}</div></div>
-      <div className={styles.kpiCard}><div className={styles.kpiTitle}>Health</div><div className={styles.kpiSmall}>{overview?.health?.backend||'?'}</div><div className={styles.kpiTiny}>{overview?.health?.time ? new Date(overview.health.time).toLocaleString() : ''}</div></div>
+  <div className={styles.kpiCard}><div className={styles.kpiTitle}>Health</div><div className={styles.kpiSmall}>{overview?.health?.backend ? String(overview.health.backend).toUpperCase() : '?'}</div><div className={styles.kpiTiny}>{overview?.health?.time ? new Date(overview.health.time).toLocaleString() : ''}</div></div>
 
       <div className={styles.card} style={{gridColumn:'1 / -1'}}>
         <div className={styles.cardTitle}>Agent Metrics</div>
