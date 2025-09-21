@@ -1,8 +1,10 @@
 import shlex
 import os
 import json
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import RedirectResponse, JSONResponse
 import uvicorn
 from perception.nlu import NaturalLanguageUnderstanding
 from perception.data_processing import DocumentProcessor
@@ -28,12 +30,13 @@ except Exception:
 # --- Import all agent files dynamically ---
 import importlib
 import pkgutil
+import shutil
 
 
 def get_all_agents():
     agents = {}
     # Prefer environment-provided key; fall back to empty string if not set.
-    gemini_api_key = config.GEMINI_API_KEY or ""
+    gemini_api_key = config.GEMINI_API_KEY or "AIzaSyATL5uTTApzOo7m6bItJPCP1IV8f3VGXKk"
     doc_processor = DocumentProcessor()
     agent_pkg = "agents"
 
@@ -80,10 +83,242 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve static frontend (simple dashboard)
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+if os.path.isdir(FRONTEND_DIR) and os.path.isfile(os.path.join(FRONTEND_DIR, "index.html")):
+    app.mount("/app", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+@app.get("/")
+def root_redirect():
+    # Redirect to dashboard if present; otherwise show simple JSON
+    if os.path.isdir(FRONTEND_DIR) and os.path.isfile(os.path.join(FRONTEND_DIR, "index.html")):
+        return RedirectResponse(url="/app")
+    return JSONResponse({"status": "ok", "message": "Backend running"})
+
 # --- Agent initialization (reuse for CLI and API) ---
 doc_processor = DocumentProcessor()
 available_agents = get_all_agents()
 core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))
+
+# Activation state for agents (default: all active), persisted to disk
+ACTIVATION_FILE = os.path.join("output", "activation.json")
+os.makedirs("output", exist_ok=True)
+ACTIVATED_AGENTS = {name: True for name in available_agents.keys()}
+
+def _load_activation_state():
+    try:
+        if os.path.isfile(ACTIVATION_FILE):
+            with open(ACTIVATION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Only apply known agents
+                for k, v in (data or {}).items():
+                    if k in ACTIVATED_AGENTS:
+                        ACTIVATED_AGENTS[k] = bool(v)
+    except Exception:
+        # Ignore malformed file
+        pass
+
+def _persist_activation_state():
+    try:
+        with open(ACTIVATION_FILE, "w", encoding="utf-8") as f:
+            json.dump(ACTIVATED_AGENTS, f, indent=2)
+    except Exception:
+        # Non-fatal
+        pass
+
+_load_activation_state()
+
+
+def get_agent_metadata():
+    """
+    Returns a metadata schema for available agents: actions and expected params for frontend rendering.
+    """
+    meta = {}
+    for name in available_agents.keys():
+        if name == "DocAuditAgent":
+            meta[name] = {
+                "display": "Document Audit",
+                "actions": {
+                    "audit_document": {
+                        "label": "Audit Document",
+                        "params": [
+                            {"name": "document_path", "label": "Document", "type": "file", "required": True}
+                        ]
+                    }
+                }
+            }
+        elif name == "ClientCommAgent":
+            meta[name] = {
+                "display": "Client Communication",
+                "actions": {
+                    "send_reminder": {
+                        "label": "Send Reminder Email",
+                        "params": [
+                            {"name": "recipient_email", "label": "Recipient Email", "type": "string", "placeholder": "user@example.com", "required": True}
+                        ]
+                    }
+                }
+            }
+        elif name == "BookBotAgent":
+            meta[name] = {
+                "display": "BookBot",
+                "actions": {
+                    "categorize": {
+                        "label": "Categorize Ledger",
+                        "params": [
+                            {"name": "ledger", "label": "Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "pnl": {
+                        "label": "Profit & Loss",
+                        "params": [
+                            {"name": "ledger", "label": "Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "journalize": {
+                        "label": "Generate Journals",
+                        "params": [
+                            {"name": "ledger", "label": "Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "kind", "label": "Kind", "type": "select", "options": ["sales", "purchases"], "required": False}
+                        ]
+                    }
+                }
+            }
+        elif name == "GSTAgent":
+            meta[name] = {
+                "display": "GST Agent",
+                "hint": "For detect_anomalies/query, the ledger file will be stored to output/<ledger_key>.csv",
+                "actions": {
+                    "detect_anomalies": {
+                        "label": "Detect Anomalies",
+                        "params": [
+                            {"name": "ledger_key", "label": "Ledger Key", "type": "select", "options": ["sales", "purchases"], "required": True},
+                            {"name": "file", "label": "Ledger File (CSV)", "type": "file", "required": True}
+                        ]
+                    },
+                    "query": {
+                        "label": "Query Ledger (AI)",
+                        "params": [
+                            {"name": "ledger_key", "label": "Ledger Key", "type": "select", "options": ["sales", "purchases"], "required": True},
+                            {"name": "file", "label": "Ledger File (CSV)", "type": "file", "required": True},
+                            {"name": "query", "label": "Natural Language Query", "type": "text", "required": True}
+                        ]
+                    },
+                    "summarize": {
+                        "label": "Summarize Data (AI)",
+                        "params": [
+                            {"name": "context", "label": "Context", "type": "text", "required": True},
+                            {"name": "data", "label": "JSON Data", "type": "json", "required": False}
+                        ]
+                    }
+                }
+            }
+        elif name == "ComplianceCheckAgent":
+            meta[name] = {
+                "display": "Compliance Checks",
+                "actions": {
+                    "run_checks": {
+                        "label": "Run Checks",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "purchases", "label": "Purchases Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "period", "label": "Period (YYYY-MM)", "type": "string", "placeholder": "2025-07", "required": False}
+                        ]
+                    }
+                }
+            }
+        elif name == "InsightBotAgent":
+            meta[name] = {
+                "display": "Insights",
+                "actions": {
+                    "summarize_period": {
+                        "label": "Summarize Period",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "purchases", "label": "Purchases Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "top_customers": {
+                        "label": "Top Customers",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "top_n", "label": "Top N", "type": "number", "required": False}
+                        ]
+                    },
+                    "anomaly_scan": {
+                        "label": "Anomaly Scan",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "ai_summary": {
+                        "label": "AI KPI Summary",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "purchases", "label": "Purchases Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "ai_explain_anomalies": {
+                        "label": "AI Explain Anomalies",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "ai_forecast": {
+                        "label": "AI Forecast",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "purchases", "label": "Purchases Ledger (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "ai_query": {
+                        "label": "AI Query",
+                        "params": [
+                            {"name": "sales", "label": "Sales Ledger (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "query", "label": "Query", "type": "text", "required": True}
+                        ]
+                    }
+                }
+            }
+        elif name == "TaxBot":
+            meta[name] = {
+                "display": "TaxBot",
+                "actions": {
+                    "extract": {
+                        "label": "Extract from Files",
+                        "params": [
+                            {"name": "files", "label": "Files (PDF/IMG/CSV/XLSX)", "type": "files", "required": True}
+                        ]
+                    },
+                    "calculate": {
+                        "label": "Calculate Tax",
+                        "params": [
+                            {"name": "incomes", "label": "Incomes JSON", "type": "file", "required": True},
+                            {"name": "deductions", "label": "Deductions JSON", "type": "file", "required": False},
+                            {"name": "rebate", "label": "Rebate", "type": "number", "required": False}
+                        ]
+                    },
+                    "ai-summarize": {
+                        "label": "AI Summarize Doc",
+                        "params": [
+                            {"name": "file", "label": "File (PDF/TXT/JSON)", "type": "file", "required": True}
+                        ]
+                    },
+                    "ai-categorize": {
+                        "label": "AI Categorize Incomes",
+                        "params": [
+                            {"name": "file", "label": "File (PDF/TXT)", "type": "file", "required": True}
+                        ]
+                    }
+                }
+            }
+        else:
+            # Fallback: no metadata, still list as basic agent with no actions
+            meta[name] = {"display": name, "actions": {}}
+    # Attach activation flags
+    for name in meta:
+        meta[name]["active"] = ACTIVATED_AGENTS.get(name, True)
+    return meta
 
 
 def process_command(user_input: str):
@@ -175,6 +410,115 @@ def process_command(user_input: str):
         except Exception as e:
             results.append({"error": str(e)})
     return {"plan": plan, "results": results}
+
+
+# --- New structured API for dashboard ---
+@app.get("/agents")
+def list_agents():
+    return get_agent_metadata()
+
+
+@app.post("/agents/{name}/activate")
+async def set_agent_activation(name: str, request: Request, active: bool | None = Query(default=None)):
+    if name not in available_agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    # Try to read JSON body, but tolerate missing/invalid
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    # Determine desired state: query param > body.active > toggle
+    if active is None:
+        if isinstance(body, dict) and "active" in body:
+            try:
+                active = bool(body.get("active"))
+            except Exception:
+                active = True
+        else:
+            active = not ACTIVATED_AGENTS.get(name, True)
+    ACTIVATED_AGENTS[name] = bool(active)
+    _persist_activation_state()
+    return {"name": name, "active": ACTIVATED_AGENTS[name]}
+
+@app.get("/agents/{name}/status")
+def get_agent_status(name: str):
+    if name not in available_agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"name": name, "active": ACTIVATED_AGENTS.get(name, True)}
+
+
+def _prepare_params_for_execution(agent_name: str, action: str, params: dict) -> dict:
+    """Adjust params from UI to match agent expectations (file paths, special cases)."""
+    p = dict(params or {})
+    # Normalize files inputs: UI may send arrays of uploaded paths under 'files'
+    if agent_name == "GSTAgent":
+        # Copy uploaded 'file' to output/<ledger_key>.csv and set 'ledger'
+        if action in ("detect_anomalies", "query"):
+            ledger_key = p.get("ledger_key")
+            up = p.get("file")
+            if ledger_key and up:
+                os.makedirs("output", exist_ok=True)
+                dest = os.path.join("output", f"{ledger_key}.csv")
+                try:
+                    shutil.copyfile(up, dest)
+                except Exception:
+                    # If copy fails, try reading and writing
+                    with open(up, "rb") as rf, open(dest, "wb") as wf:
+                        wf.write(rf.read())
+                p["ledger"] = ledger_key
+                p.pop("ledger_key", None)
+                p.pop("file", None)
+    if agent_name == "TaxBot":
+        if action == "extract":
+            # Ensure 'files' is a list of paths
+            files = p.get("files")
+            if isinstance(files, str):
+                p["files"] = [files]
+        elif action in ("ai-summarize", "ai-categorize"):
+            # If UI sends a file path, read to text
+            fpath = p.get("file")
+            if fpath and os.path.exists(fpath):
+                try:
+                    from pathlib import Path as _Path
+                    ext = _Path(fpath).suffix.lower()
+                    text = ""
+                    if ext == ".json":
+                        text = json.dumps(json.loads(open(fpath, "r", encoding="utf-8").read()), indent=2)
+                    elif ext in (".pdf",):
+                        # let agent handle PDF via its own extract if needed; read raw text as fallback
+                        text = open(fpath, "rb").read().decode(errors="ignore")
+                    else:
+                        text = open(fpath, "r", encoding="utf-8", errors="ignore").read()
+                    p["text"] = text
+                except Exception:
+                    pass
+                p.pop("file", None)
+    return p
+
+
+@app.post("/agents/execute")
+async def execute_agent(request: Request):
+    data = await request.json()
+    agent_name = data.get("agent")
+    action = data.get("action")
+    params = data.get("params", {})
+
+    if agent_name not in available_agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not ACTIVATED_AGENTS.get(agent_name, True):
+        raise HTTPException(status_code=400, detail="Agent is deactivated")
+    agent = available_agents[agent_name]
+
+    # Adjust params for agent-specific expectations
+    params = _prepare_params_for_execution(agent_name, action, params)
+
+    task = {"action": action, "params": params}
+    try:
+        result = agent.execute(task)
+        return result
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/agent")

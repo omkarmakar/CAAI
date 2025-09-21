@@ -10,7 +10,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+############################
 # Environment variables
+############################
 .env
 .env.*
 
@@ -67,15 +69,20 @@ Thumbs.db
 
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
+############################
+# Node / Next.js
+############################
+# Ignore node modules anywhere (frontend-next/node_modules, etc.)
+node_modules/
 
-# next.js
-/.next/
-/out/
+# Next.js build folders
+frontend-next/.next/
+frontend-next/out/
+frontend-next/.eslintcache
+frontend-next/coverage/
 
-# production
-/build
+# production builds (generic)
+build/
 
 # debug
 npm-debug.log*
@@ -83,12 +90,31 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
-
-# vercel
+############################
+# Hosting / Vercel
+############################
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+############################
+# Python type/checker caches
+############################
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+############################
+# Project-specific generated data
+############################
+# Backend runtime outputs and uploads
+backend/output/
+backend/uploaded_files/
+# Root-level outputs
+output/
+
+# Logs
+*.log
+*.log.*

@@ -1,0 +1,59 @@
+.container{min-height:100vh}
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#111735;border-bottom:1px solid #283055}
+.status{font-size:12px;color:#aab}
+.main{display:flex;gap:16px;padding:16px}
+.agents{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.panel{flex:1.2;background:#0f1530;border:1px solid #283055;border-radius:10px;padding:16px;min-height:60vh}
+.card{background:#12193d;border:1px solid #2b3569;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;transition:transform .06s ease,box-shadow .06s ease}
+.card:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.cardTitle{font-weight:600;color:#fff}
+.cardActions{display:flex;justify-content:space-between;align-items:center}
+.switch{position:relative;display:inline-block;width:42px;height:22px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#394066;transition:.2s;border-radius:11px}
+.slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;top:3px;background:#fff;transition:.2s;border-radius:50%}
+/* ON state (checked) */
+.switch input:checked + .slider{background:#2fb36e}
+.switch input:checked + .slider:before{transform:translateX(20px)}
+/* Disabled + focus states */
+.switch input:disabled + .slider{opacity:.6;cursor:not-allowed}
+.switch input:focus + .slider{box-shadow:0 0 0 2px rgba(47,179,110,.35)}
+.btn{background:#1a2250;border:1px solid #2b3569;color:#cfe;cursor:pointer;padding:8px 10px;border-radius:8px;font-size:13px}
+.btn:hover{background:#232c66}
+.actionsList{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+.pill{padding:6px 10px;background:#1a2250;border:1px solid #2b3569;border-radius:999px;color:#cfe;cursor:pointer;font-size:12px}
+.pillActive{background:#2b3569}
+.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.formRow{display:flex;flex-direction:column;gap:6px}
+.runBtn{margin-top:12px;background:#2fb36e;border:none;color:#03110a;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
+.result{margin-top:16px;background:#0b1020;border:1px solid #2b3569;border-radius:10px;padding:12px;max-height:50vh;overflow:auto}
+.footer{padding:10px 16px;color:#899}
+
+/* Minor helpers used by the page */
+.hint{color:#9aa5d1;font-size:12px}
+.errorBox{background:#5f2525;color:#ffadad;border:1px solid #8b2e2e;padding:10px;border-radius:8px;margin:8px 0}
+.list{padding-left:18px;color:#e6e6f0}
+
+.box{background:#0b1020;border:1px solid #2b3569;border-radius:12px;padding:12px;margin:10px 0}
+.boxTitle{font-weight:700;color:#e6ebff;margin-bottom:8px}
+.subtle{color:#9aa5d1;font-size:12px;margin-top:6px}
+.pre{background:#0a0f24;border:1px solid #233058;border-radius:8px;padding:10px;overflow:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:10px 0}
+.kpi{background:#111735;border:1px solid #2b3569;border-radius:10px;padding:10px}
+.kpiLabel{color:#9aa5d1;font-size:12px}
+.kpiVal{color:#e6ebff;font-size:18px;font-weight:700;margin-top:4px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;margin-left:6px}
+.info{background:#25335f;color:#cfe}
+.warning{background:#5f4b25;color:#ffd591}
+.danger{background:#5f2525;color:#ffadad}
+.bars{display:flex;flex-direction:column;gap:8px}
+.barRow{display:grid;grid-template-columns:1fr 3fr auto;align-items:center;gap:10px}
+.bar{background:#12193d;border:1px solid #2b3569;border-radius:999px;height:12px;overflow:hidden}
+.barFill{background:#2fb36e;height:100%}
+.barLabel{color:#cfe;font-size:12px}
+.barVal{color:#9aa5d1;font-size:12px}
+.table{width:100%;border-collapse:separate;border-spacing:0}
+.table thead th{position:sticky;top:0;background:#0f1530;color:#cfe;border-bottom:1px solid #2b3569;text-align:left;padding:8px;font-size:12px}
+.table td{border-bottom:1px solid #22305c;padding:8px;color:#e6e6f0;font-size:13px}
+.subcard{background:#0f1530;border:1px solid #2b3569;border-radius:10px;padding:10px;margin:8px 0}
+.subcardTitle{font-weight:600;color:#cfe;margin-bottom:6px}
