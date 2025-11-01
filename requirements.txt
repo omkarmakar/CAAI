@@ -10,3 +10,10 @@ fastapi
 uvicorn
 perception
 python-multipart
+# Authentication dependencies
+sqlalchemy
+pyjwt
+python-jose[cryptography]
+passlib[bcrypt]
+email-validator
+python-multipart

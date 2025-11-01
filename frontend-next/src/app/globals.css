@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 *{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0;background:#0b1020;color:#e6e6f0}
 
@@ -53,3 +57,22 @@ body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto S
 .table td{border-bottom:1px solid #22305c;padding:8px;color:#e6e6f0;font-size:13px}
 .subcard{background:#0f1530;border:1px solid #2b3569;border-radius:10px;padding:10px;margin:8px 0}
 .subcardTitle{font-weight:600;color:#cfe;margin-bottom:6px}
+
+/* Defensive rules: prevent oversized images/icons from overflowing their containers.
+	 Some pages (older pages or third-party content) may inject large SVGs or images
+	 without width/height constraints; these rules make those elements responsive by
+	 default so they can't blow up the layout. */
+img, svg {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	max-height: 80vh; /* avoid fullscreen oversized icons */
+}
+
+/* If a background image is used unexpectedly at body level, prefer no-repeat so
+	 multiple stacked large icons don't appear. This is conservative; tweak if you
+	 intentionally use tiled backgrounds. */
+body {
+	background-repeat: no-repeat;
+	background-position: center top;
+}

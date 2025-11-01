@@ -1,11 +1,17 @@
 import shlex
 import os
 import json
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse, JSONResponse
 import uvicorn
+
+# Authentication imports
+from auth.models import create_tables, User
+from auth.routes import router as auth_router
+from auth.jwt_auth import get_current_user, AuditLogger
+from auth.decorators import authenticated_agent_access
 from perception.nlu import NaturalLanguageUnderstanding
 from perception.data_processing import DocumentProcessor
 from agent_core.agent import CoreAIAgent
@@ -75,7 +81,15 @@ def get_all_agents():
     return agents
 
 
-app = FastAPI()
+app = FastAPI(
+    title="CAAI - CA AI Agent System",
+    description="Comprehensive AI Agent System for CA Firms with Authentication",
+    version="2.0.0"
+)
+
+# Initialize database on startup
+create_tables()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Adjust for production
@@ -83,6 +97,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include authentication routes
+app.include_router(auth_router)
 
 # Serve static frontend (simple dashboard)
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
@@ -622,7 +639,11 @@ def _prepare_params_for_execution(agent_name: str, action: str, params: dict) ->
 
 
 @app.post("/agents/execute")
-async def execute_agent(request: Request):
+async def execute_agent(
+    request: Request, 
+    current_user: User = Depends(get_current_user)
+):
+    """Execute agent with authentication and authorization"""
     data = await request.json()
     agent_name = data.get("agent")
     action = data.get("action")
@@ -630,21 +651,91 @@ async def execute_agent(request: Request):
 
     if agent_name not in available_agents:
         raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Check if user can access this agent
+    if not current_user.can_access_agent(agent_name):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Access denied to agent: {agent_name}. Required role not met."
+        )
+    
     if not ACTIVATED_AGENTS.get(agent_name, True):
         raise HTTPException(status_code=400, detail="Agent is deactivated")
+    
     agent = available_agents[agent_name]
 
     # Adjust params for agent-specific expectations
     params = _prepare_params_for_execution(agent_name, action, params)
 
     task = {"action": action, "params": params}
-    _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "started"})
+    
+    # Enhanced activity logging with user information
+    _log_activity({
+        "type": "agent_execute", 
+        "agent": agent_name, 
+        "action": action, 
+        "status": "started",
+        "user_id": current_user.id,
+        "username": current_user.username
+    })
+    
     try:
         result = agent.execute(task)
-        _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "success"})
+        _log_activity({
+            "type": "agent_execute", 
+            "agent": agent_name, 
+            "action": action, 
+            "status": "success",
+            "user_id": current_user.id,
+            "username": current_user.username
+        })
+        
+        # Log to audit system
+        from auth.models import get_db
+        db = next(get_db())
+        try:
+            AuditLogger.log_action(
+                db=db,
+                user_id=current_user.id,
+                action=f"agent_execute_{agent_name}",
+                resource=f"agent:{agent_name}",
+                details=f"Action: {action}",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                status="success"
+            )
+        finally:
+            db.close()
+        
         return result
     except Exception as e:
-        _log_activity({"type": "agent_execute", "agent": agent_name, "action": action, "status": "error", "error": str(e)})
+        _log_activity({
+            "type": "agent_execute", 
+            "agent": agent_name, 
+            "action": action, 
+            "status": "error", 
+            "error": str(e),
+            "user_id": current_user.id,
+            "username": current_user.username
+        })
+        
+        # Log error to audit system
+        from auth.models import get_db
+        db = next(get_db())
+        try:
+            AuditLogger.log_action(
+                db=db,
+                user_id=current_user.id,
+                action=f"agent_execute_{agent_name}",
+                resource=f"agent:{agent_name}",
+                details=f"Action: {action}, Error: {str(e)}",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                status="error"
+            )
+        finally:
+            db.close()
+        
         return {"status": "error", "message": str(e)}
 
 
