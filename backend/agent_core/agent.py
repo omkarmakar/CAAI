@@ -88,6 +88,30 @@ class CoreAIAgent:
             plan.append({"tool": "TaxBot", "action": "ai-categorize"})
         elif user_input.startswith("taxbot ai-check-deductions"):
             plan.append({"tool": "TaxBot", "action": "ai-check-deductions"})
+        elif user_input.startswith("recon match"):
+            plan.append({"tool": "ReconAgent", "action": "match_payments"})
+        elif user_input.startswith("recon summarize"):
+            plan.append({"tool": "ReconAgent", "action": "summarize_discrepancies"})
+        elif user_input.startswith("treasury forecast"):
+            plan.append({"tool": "TreasuryAgent", "action": "forecast_cash"})
+        elif user_input.startswith("treasury whatif"):
+            plan.append({"tool": "TreasuryAgent", "action": "what_if"})
+        elif user_input.startswith("collections prioritize"):
+            plan.append({"tool": "CollectionsAgent", "action": "prioritize_accounts"})
+        elif user_input.startswith("collections remind"):
+            plan.append({"tool": "CollectionsAgent", "action": "draft_reminder"})
+        elif user_input.startswith("audit orchestrate"):
+            plan.append({"tool": "AuditOrchestrator", "action": "orchestrate_audit"})
+        elif user_input.startswith("tds calculate"):
+            plan.append({"tool": "TDSAgent", "action": "calculate_tds"})
+        elif user_input.startswith("advisory recommend"):
+            plan.append({"tool": "AdvisoryBot", "action": "recommendations"})
+        elif user_input.startswith("contract analyze"):
+            plan.append({"tool": "ContractAgent", "action": "analyze_contract"})
+        elif user_input.startswith("cashflow update"):
+            plan.append({"tool": "CashFlowAgent", "action": "update_forecast"})
+        elif user_input.startswith("matchmaking find"):
+            plan.append({"tool": "MatchmakingAgent", "action": "find_expert"})
 
         return plan
 

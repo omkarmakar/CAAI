@@ -46,38 +46,57 @@ def get_all_agents():
     gemini_api_key = config.GEMINI_API_KEY or "AIzaSyATL5uTTApzOo7m6bItJPCP1IV8f3VGXKk"
     doc_processor = DocumentProcessor()
     agent_pkg = "agents"
-
+    # We'll allow multiple sensible suffixes so new classes like AdvisoryBot or AuditOrchestrator are discovered.
+    pending_orchestrator_cls = None
     for _, modname, _ in pkgutil.iter_modules([os.path.join(os.path.dirname(__file__), "agents")]):
         module = importlib.import_module(f"{agent_pkg}.{modname}")
         for attr in dir(module):
-            if attr.endswith("Agent") and attr != "CoreAIAgent":
+            # accept Agent, Bot, Orchestrator suffixes
+            if (attr.endswith("Agent") or attr.endswith("Bot") or attr.endswith("Orchestrator")) and attr != "CoreAIAgent":
                 agent_cls = getattr(module, attr)
 
-                if attr == "DocAuditAgent":
-                    agents[attr] = agent_cls(doc_processor, gemini_api_key)
-                elif attr == "ClientCommAgent":
-                    agents[attr] = agent_cls(gemini_api_key)
-                elif attr == "BookBotAgent":
-                    agents[attr] = agent_cls(gemini_api_key)
-                elif attr == "ComplianceCheckAgent":
-                    agents[attr] = agent_cls(gemini_api_key)
-                elif attr == "InsightBotAgent":
-                    agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
-                elif attr == "GSTAgent":
-                    # Hardcode or load org config
-                    org = OrgInfo("DemoOrg", "29ABCDE1234F2Z5", "29", "monthly")
-                    agents[attr] = agent_cls(org, Path("./output"), gemini_api_key=gemini_api_key)
-                elif attr == "TaxBot":
-                    agents[attr] = agent_cls(
-                        out_dir=Path("./output/taxbot"),
-                        gemini_api_key=gemini_api_key
-                    )
+                # Defer instantiation of the orchestrator until other agents are created
+                if attr == "AuditOrchestrator":
+                    pending_orchestrator_cls = agent_cls
+                    continue
 
-                else:
-                    try:
+                try:
+                    if attr == "DocAuditAgent":
+                        agents[attr] = agent_cls(doc_processor, gemini_api_key)
+                    elif attr == "ClientCommAgent":
+                        agents[attr] = agent_cls(gemini_api_key)
+                    elif attr == "BookBotAgent":
+                        agents[attr] = agent_cls(gemini_api_key)
+                    elif attr == "ComplianceCheckAgent":
+                        agents[attr] = agent_cls(gemini_api_key)
+                    elif attr == "InsightBotAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "GSTAgent":
+                        # Hardcode or load org config
+                        org = OrgInfo("DemoOrg", "29ABCDE1234F2Z5", "29", "monthly")
+                        agents[attr] = agent_cls(org, Path("./output"), gemini_api_key=gemini_api_key)
+                    elif attr == "TaxBot":
+                        agents[attr] = agent_cls(
+                            out_dir=Path("./output/taxbot"),
+                            gemini_api_key=gemini_api_key
+                        )
+                    else:
+                        # generic instantiation
                         agents[attr] = agent_cls()
-                    except Exception:
-                        pass
+                except Exception:
+                    # if instantiation fails, skip gracefully
+                    pass
+
+    # Instantiate the orchestrator with access to the agents dict so it can call peers
+    if pending_orchestrator_cls:
+        try:
+            agents["AuditOrchestrator"] = pending_orchestrator_cls(available_agents=agents)
+        except Exception:
+            try:
+                # Fallback: try no-arg constructor
+                agents["AuditOrchestrator"] = pending_orchestrator_cls()
+            except Exception:
+                pass
     return agents
 
 
@@ -308,6 +327,91 @@ def get_agent_metadata():
                     }
                 }
             }
+        elif name == "ReconAgent":
+            meta[name] = {
+                "display": "Recon (Reconciliation)",
+                "actions": {
+                    "match_payments": {
+                        "label": "Match Payments",
+                        "params": [
+                            {"name": "ledger", "label": "Ledger File (CSV/XLSX)", "type": "file", "required": True}
+                        ]
+                    },
+                    "summarize_discrepancies": {
+                        "label": "Summarize Discrepancies",
+                        "params": [
+                            {"name": "issues", "label": "Issues (JSON)", "type": "json", "required": False}
+                        ]
+                    }
+                }
+            }
+        elif name == "TreasuryAgent":
+            meta[name] = {
+                "display": "Treasury",
+                "actions": {
+                    "forecast_cash": {"label": "Forecast Cash", "params": [{"name": "days", "label": "Days", "type": "number", "required": False}]},
+                    "what_if": {"label": "What-if Scenario", "params": [{"name": "scenario", "label": "Scenario", "type": "text", "required": False}]}
+                }
+            }
+        elif name == "CollectionsAgent":
+            meta[name] = {
+                "display": "Collections",
+                "actions": {
+                    "prioritize_accounts": {"label": "Prioritize Accounts", "params": [{"name": "accounts", "label": "Accounts (JSON)", "type": "json", "required": True}]},
+                    "draft_reminder": {"label": "Draft Reminder", "params": [{"name": "recipient", "label": "Recipient", "type": "string", "required": True}, {"name": "amount", "label": "Amount", "type": "number", "required": False}]}
+                }
+            }
+        elif name == "AuditOrchestrator":
+            meta[name] = {
+                "display": "Audit Orchestrator",
+                "actions": {
+                    "orchestrate_audit": {
+                        "label": "Orchestrate Audit",
+                        "params": [
+                            {"name": "document_params", "label": "Document Params (JSON)", "type": "json", "required": False},
+                            {"name": "recon_params", "label": "Recon Params (JSON)", "type": "json", "required": False}
+                        ]
+                    }
+                }
+            }
+        elif name == "TDSAgent":
+            meta[name] = {
+                "display": "TDS / Compliance",
+                "actions": {
+                    "calculate_tds": {"label": "Calculate TDS", "params": [{"name": "amount", "label": "Amount", "type": "number", "required": True}, {"name": "rate", "label": "Rate", "type": "number", "required": False}]},
+                    "run_checks": {"label": "Run Compliance Checks", "params": [{"name": "period", "label": "Period", "type": "string", "required": False}]}
+                }
+            }
+        elif name == "AdvisoryBot":
+            meta[name] = {
+                "display": "Advisory",
+                "actions": {
+                    "recommendations": {"label": "Get Recommendations", "params": [{"name": "context", "label": "Context", "type": "text", "required": False}]},
+                    "forecast": {"label": "Run Forecast", "params": [{"name": "horizon", "label": "Horizon (days)", "type": "number", "required": False}]}
+                }
+            }
+        elif name == "ContractAgent":
+            meta[name] = {
+                "display": "Contract Analysis",
+                "actions": {
+                    "analyze_contract": {"label": "Analyze Contract", "params": [{"name": "contract_path", "label": "Contract (file)", "type": "file", "required": True}]}
+                }
+            }
+        elif name == "CashFlowAgent":
+            meta[name] = {
+                "display": "Cash Flow",
+                "actions": {
+                    "update_forecast": {"label": "Update Forecast", "params": [{"name": "source", "label": "Bank Feed (file)", "type": "file", "required": False}]},
+                    "alert_low_liquidity": {"label": "Alert Low Liquidity", "params": [{"name": "threshold", "label": "Threshold", "type": "number", "required": False}]}
+                }
+            }
+        elif name == "MatchmakingAgent":
+            meta[name] = {
+                "display": "Matchmaking",
+                "actions": {
+                    "find_expert": {"label": "Find Expert", "params": [{"name": "topic", "label": "Topic", "type": "text", "required": True}]}
+                }
+            }
         elif name == "TaxBot":
             meta[name] = {
                 "display": "TaxBot",
@@ -347,6 +451,7 @@ def get_agent_metadata():
     for name in meta:
         meta[name]["active"] = ACTIVATED_AGENTS.get(name, True)
     return meta
+
 
 def _safe_float(x, default=0.0):
     try:
