@@ -12,10 +12,10 @@ from auth.models import create_tables, User
 from auth.routes import router as auth_router
 from auth.jwt_auth import get_current_user, AuditLogger
 from auth.decorators import authenticated_agent_access
-from perception.nlu import NaturalLanguageUnderstanding
+# from perception.nlu import NaturalLanguageUnderstanding  # Disabled for faster startup
 from perception.data_processing import DocumentProcessor
-from agent_core.agent import CoreAIAgent
-from action.human_in_the_loop import HumanInTheLoop
+# from agent_core.agent import CoreAIAgent  # Disabled for faster startup
+# from action.human_in_the_loop import HumanInTheLoop  # Disabled for faster startup
 from agents.doc_audit_agent import DocAuditAgent
 from agents.client_comm_agent import ClientCommAgent
 from agents.gst_agent import GSTAgent, OrgInfo
@@ -158,7 +158,7 @@ def root_redirect():
 # --- Agent initialization (reuse for CLI and API) ---
 doc_processor = DocumentProcessor()
 available_agents = get_all_agents()
-core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))
+# core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))  # Disabled for faster startup
 
 # Activation state for agents (default: all active), persisted to disk
 ACTIVATION_FILE = os.path.join("output", "activation.json")
@@ -785,9 +785,8 @@ def data_purchases(path: str | None = Query(default=None)):
 
 def process_command(user_input: str):
     command_parts = shlex.split(user_input)
-    plan = core_agent.process_request(user_input)
-    if not plan:
-        return {"error": "Could not determine an action plan for your command."}
+    # Disabled CoreAIAgent - return error for now
+    return {"error": "CLI command processing is disabled. Please use the web dashboard."}
 
     results = []
     for step in plan:
@@ -1090,7 +1089,7 @@ def main():
     doc_processor = DocumentProcessor()
 
     available_agents = get_all_agents()
-    core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))
+    # core_agent = CoreAIAgent(available_tools=list(available_agents.keys()))  # Disabled for faster startup
 
     print("\n--- AI Agent for CA Firm ---")
     print("Available Agents: " + ", ".join(available_agents.keys()))
