@@ -58,7 +58,7 @@ class ClientCommAgent(BaseAgent):
             "Return the subject and body."
         )
         try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             response = model.generate_content(prompt)
             content = response.text
             # Expecting: Subject: ...\nBody: ...

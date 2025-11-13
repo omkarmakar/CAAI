@@ -44,7 +44,7 @@ class BookBotAgent(BaseAgent):
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=self.gemini_api_key)
-                self.gemini = genai.GenerativeModel("gemini-1.5-flash")
+                self.gemini = genai.GenerativeModel("gemini-2.0-flash")
             except ImportError:
                 print("⚠️ google-generativeai not installed, BookBotAgent will work without Gemini.")
 

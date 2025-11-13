@@ -43,7 +43,7 @@ import shutil
 def get_all_agents():
     agents = {}
     # Prefer environment-provided key; fall back to empty string if not set.
-    gemini_api_key = config.GEMINI_API_KEY or "AIzaSyATL5uTTApzOo7m6bItJPCP1IV8f3VGXKk"
+    gemini_api_key = config.GEMINI_API_KEY or ""
     doc_processor = DocumentProcessor()
     agent_pkg = "agents"
     # We'll allow multiple sensible suffixes so new classes like AdvisoryBot or AuditOrchestrator are discovered.
@@ -66,7 +66,7 @@ def get_all_agents():
                     elif attr == "ClientCommAgent":
                         agents[attr] = agent_cls(gemini_api_key)
                     elif attr == "BookBotAgent":
-                        agents[attr] = agent_cls(gemini_api_key)
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
                     elif attr == "ComplianceCheckAgent":
                         agents[attr] = agent_cls(gemini_api_key)
                     elif attr == "InsightBotAgent":
@@ -80,9 +80,28 @@ def get_all_agents():
                             out_dir=Path("./output/taxbot"),
                             gemini_api_key=gemini_api_key
                         )
+                    # NEW: AI-Enhanced Agents with Gemini Integration
+                    elif attr == "AdvisoryBot":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "CashFlowAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "CollectionsAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "ContractAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "MatchmakingAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "ReconAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                    elif attr == "TreasuryAgent":
+                        agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
                     else:
-                        # generic instantiation
-                        agents[attr] = agent_cls()
+                        # generic instantiation - try with gemini_api_key first
+                        try:
+                            agents[attr] = agent_cls(gemini_api_key=gemini_api_key)
+                        except TypeError:
+                            # Fallback if agent doesn't accept gemini_api_key
+                            agents[attr] = agent_cls()
                 except Exception:
                     # if instantiation fails, skip gracefully
                     pass
@@ -90,13 +109,17 @@ def get_all_agents():
     # Instantiate the orchestrator with access to the agents dict so it can call peers
     if pending_orchestrator_cls:
         try:
-            agents["AuditOrchestrator"] = pending_orchestrator_cls(available_agents=agents)
+            agents["AuditOrchestrator"] = pending_orchestrator_cls(available_agents=agents, gemini_api_key=gemini_api_key)
         except Exception:
             try:
-                # Fallback: try no-arg constructor
-                agents["AuditOrchestrator"] = pending_orchestrator_cls()
+                # Fallback: try with just available_agents
+                agents["AuditOrchestrator"] = pending_orchestrator_cls(available_agents=agents)
             except Exception:
-                pass
+                try:
+                    # Fallback: try no-arg constructor
+                    agents["AuditOrchestrator"] = pending_orchestrator_cls()
+                except Exception:
+                    pass
     return agents
 
 
@@ -332,15 +355,30 @@ def get_agent_metadata():
                 "display": "Recon (Reconciliation)",
                 "actions": {
                     "match_payments": {
-                        "label": "Match Payments",
+                        "label": "AI-Powered Payment Matching",
                         "params": [
-                            {"name": "ledger", "label": "Ledger File (CSV/XLSX)", "type": "file", "required": True}
+                            {"name": "ledger", "label": "Ledger File (CSV/XLSX)", "type": "file", "required": True},
+                            {"name": "payments_file", "label": "Payments File (CSV)", "type": "file", "required": False}
                         ]
                     },
                     "summarize_discrepancies": {
                         "label": "Summarize Discrepancies",
                         "params": [
                             {"name": "issues", "label": "Issues (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "explain_discrepancies": {
+                        "label": "AI Explain Discrepancies",
+                        "params": [
+                            {"name": "discrepancies", "label": "Discrepancies (JSON)", "type": "json", "required": True},
+                            {"name": "context", "label": "Context", "type": "text", "required": False}
+                        ]
+                    },
+                    "reconciliation_insights": {
+                        "label": "Reconciliation Insights",
+                        "params": [
+                            {"name": "recon_history", "label": "Reconciliation History (JSON)", "type": "json", "required": False},
+                            {"name": "current_results", "label": "Current Results (JSON)", "type": "json", "required": False}
                         ]
                     }
                 }
@@ -349,16 +387,73 @@ def get_agent_metadata():
             meta[name] = {
                 "display": "Treasury",
                 "actions": {
-                    "forecast_cash": {"label": "Forecast Cash", "params": [{"name": "days", "label": "Days", "type": "number", "required": False}]},
-                    "what_if": {"label": "What-if Scenario", "params": [{"name": "scenario", "label": "Scenario", "type": "text", "required": False}]}
+                    "forecast_cash": {
+                        "label": "AI Treasury Forecast",
+                        "params": [
+                            {"name": "days", "label": "Days", "type": "number", "required": False},
+                            {"name": "historical_data", "label": "Historical Data (JSON)", "type": "json", "required": False},
+                            {"name": "assumptions", "label": "Assumptions (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "what_if": {
+                        "label": "What-if Scenario Analysis",
+                        "params": [
+                            {"name": "scenario", "label": "Scenario Name", "type": "text", "required": False},
+                            {"name": "base_case", "label": "Base Case (JSON)", "type": "json", "required": False},
+                            {"name": "variables", "label": "Variables (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "optimize_liquidity": {
+                        "label": "Liquidity Optimization",
+                        "params": [
+                            {"name": "current_position", "label": "Current Position (JSON)", "type": "json", "required": True},
+                            {"name": "constraints", "label": "Constraints (JSON)", "type": "json", "required": False},
+                            {"name": "objectives", "label": "Objectives (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "working_capital": {
+                        "label": "Working Capital Analysis",
+                        "params": [
+                            {"name": "financial_data", "label": "Financial Data (JSON)", "type": "json", "required": True},
+                            {"name": "industry", "label": "Industry", "type": "string", "required": False}
+                        ]
+                    }
                 }
             }
         elif name == "CollectionsAgent":
             meta[name] = {
                 "display": "Collections",
                 "actions": {
-                    "prioritize_accounts": {"label": "Prioritize Accounts", "params": [{"name": "accounts", "label": "Accounts (JSON)", "type": "json", "required": True}]},
-                    "draft_reminder": {"label": "Draft Reminder", "params": [{"name": "recipient", "label": "Recipient", "type": "string", "required": True}, {"name": "amount", "label": "Amount", "type": "number", "required": False}]}
+                    "prioritize_accounts": {
+                        "label": "AI Account Prioritization",
+                        "params": [{"name": "accounts", "label": "Accounts (JSON)", "type": "json", "required": True}]
+                    },
+                    "draft_reminder": {
+                        "label": "AI Draft Collection Reminder",
+                        "params": [
+                            {"name": "recipient", "label": "Recipient Email", "type": "string", "required": True},
+                            {"name": "recipient_name", "label": "Recipient Name", "type": "string", "required": False},
+                            {"name": "amount", "label": "Amount", "type": "number", "required": False},
+                            {"name": "invoice_no", "label": "Invoice Number", "type": "string", "required": False},
+                            {"name": "due_date", "label": "Due Date", "type": "string", "required": False},
+                            {"name": "days_overdue", "label": "Days Overdue", "type": "number", "required": False},
+                            {"name": "tone", "label": "Tone", "type": "select", "options": ["friendly", "firm", "final", "legal"], "required": False}
+                        ]
+                    },
+                    "collection_strategy": {
+                        "label": "Collection Strategy",
+                        "params": [
+                            {"name": "portfolio", "label": "Receivables Portfolio (JSON)", "type": "json", "required": True},
+                            {"name": "industry", "label": "Industry", "type": "string", "required": False}
+                        ]
+                    },
+                    "aging_analysis": {
+                        "label": "AI Aging Analysis",
+                        "params": [
+                            {"name": "aging_data", "label": "Aging Data (JSON)", "type": "json", "required": True},
+                            {"name": "comparison_period", "label": "Comparison Period", "type": "string", "required": False}
+                        ]
+                    }
                 }
             }
         elif name == "AuditOrchestrator":
@@ -366,10 +461,34 @@ def get_agent_metadata():
                 "display": "Audit Orchestrator",
                 "actions": {
                     "orchestrate_audit": {
-                        "label": "Orchestrate Audit",
+                        "label": "AI Orchestrate Audit",
                         "params": [
                             {"name": "document_params", "label": "Document Params (JSON)", "type": "json", "required": False},
-                            {"name": "recon_params", "label": "Recon Params (JSON)", "type": "json", "required": False}
+                            {"name": "recon_params", "label": "Recon Params (JSON)", "type": "json", "required": False},
+                            {"name": "compliance_params", "label": "Compliance Params (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "risk_assessment": {
+                        "label": "AI Audit Risk Assessment",
+                        "params": [
+                            {"name": "financial_data", "label": "Financial Data (JSON)", "type": "json", "required": True},
+                            {"name": "industry", "label": "Industry", "type": "string", "required": False},
+                            {"name": "previous_audits", "label": "Previous Audits (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "audit_planning": {
+                        "label": "AI Audit Planning",
+                        "params": [
+                            {"name": "client_info", "label": "Client Info (JSON)", "type": "json", "required": True},
+                            {"name": "audit_scope", "label": "Audit Scope", "type": "text", "required": False},
+                            {"name": "timeline", "label": "Timeline", "type": "string", "required": False}
+                        ]
+                    },
+                    "summarize_findings": {
+                        "label": "Summarize Audit Findings",
+                        "params": [
+                            {"name": "findings", "label": "Findings (JSON)", "type": "json", "required": True},
+                            {"name": "audit_type", "label": "Audit Type", "type": "string", "required": False}
                         ]
                     }
                 }
@@ -386,30 +505,128 @@ def get_agent_metadata():
             meta[name] = {
                 "display": "Advisory",
                 "actions": {
-                    "recommendations": {"label": "Get Recommendations", "params": [{"name": "context", "label": "Context", "type": "text", "required": False}]},
-                    "forecast": {"label": "Run Forecast", "params": [{"name": "horizon", "label": "Horizon (days)", "type": "number", "required": False}]}
+                    "recommendations": {
+                        "label": "AI Tax & Financial Recommendations",
+                        "params": [
+                            {"name": "context", "label": "Business Context", "type": "text", "required": False},
+                            {"name": "financial_data", "label": "Financial Data (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "forecast": {
+                        "label": "AI Business Forecast",
+                        "params": [
+                            {"name": "horizon", "label": "Horizon (days)", "type": "number", "required": False},
+                            {"name": "historical_data", "label": "Historical Data (JSON)", "type": "json", "required": False},
+                            {"name": "business_context", "label": "Business Context", "type": "text", "required": False}
+                        ]
+                    },
+                    "analyze_financials": {
+                        "label": "Comprehensive Financial Analysis",
+                        "params": [
+                            {"name": "financial_statements", "label": "Financial Statements (JSON)", "type": "json", "required": True},
+                            {"name": "industry", "label": "Industry", "type": "string", "required": False}
+                        ]
+                    },
+                    "tax_planning": {
+                        "label": "Strategic Tax Planning",
+                        "params": [
+                            {"name": "business_type", "label": "Business Type", "type": "string", "required": False},
+                            {"name": "annual_income", "label": "Annual Income", "type": "number", "required": False},
+                            {"name": "current_tax_regime", "label": "Current Tax Regime", "type": "string", "required": False}
+                        ]
+                    }
                 }
             }
         elif name == "ContractAgent":
             meta[name] = {
                 "display": "Contract Analysis",
                 "actions": {
-                    "analyze_contract": {"label": "Analyze Contract", "params": [{"name": "contract_path", "label": "Contract (file)", "type": "file", "required": True}]}
+                    "analyze_contract": {
+                        "label": "AI Contract Analysis",
+                        "params": [
+                            {"name": "contract_path", "label": "Contract (file)", "type": "file", "required": True},
+                            {"name": "contract_type", "label": "Contract Type", "type": "string", "required": False}
+                        ]
+                    },
+                    "extract_obligations": {
+                        "label": "Extract Obligations",
+                        "params": [{"name": "contract_path", "label": "Contract (file)", "type": "file", "required": True}]
+                    },
+                    "risk_assessment": {
+                        "label": "Contract Risk Assessment",
+                        "params": [
+                            {"name": "contract_path", "label": "Contract (file)", "type": "file", "required": True},
+                            {"name": "company_context", "label": "Company Context", "type": "text", "required": False}
+                        ]
+                    },
+                    "compare_contracts": {
+                        "label": "Compare Contracts",
+                        "params": [{"name": "contracts", "label": "Contract Files (JSON array)", "type": "json", "required": True}]
+                    }
                 }
             }
         elif name == "CashFlowAgent":
             meta[name] = {
                 "display": "Cash Flow",
                 "actions": {
-                    "update_forecast": {"label": "Update Forecast", "params": [{"name": "source", "label": "Bank Feed (file)", "type": "file", "required": False}]},
-                    "alert_low_liquidity": {"label": "Alert Low Liquidity", "params": [{"name": "threshold", "label": "Threshold", "type": "number", "required": False}]}
+                    "update_forecast": {
+                        "label": "AI Cash Flow Forecast",
+                        "params": [
+                            {"name": "source", "label": "Bank Feed (file)", "type": "file", "required": False},
+                            {"name": "historical_data", "label": "Historical Data (JSON)", "type": "json", "required": False},
+                            {"name": "forecast_period", "label": "Forecast Period (days)", "type": "number", "required": False}
+                        ]
+                    },
+                    "alert_low_liquidity": {
+                        "label": "Liquidity Alert Analysis",
+                        "params": [
+                            {"name": "threshold", "label": "Threshold", "type": "number", "required": False},
+                            {"name": "current_balance", "label": "Current Balance", "type": "number", "required": False},
+                            {"name": "projected_cash", "label": "Projected Cash (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "analyze_cash_trend": {
+                        "label": "Cash Trend Analysis",
+                        "params": [
+                            {"name": "cash_flow_data", "label": "Cash Flow Data (JSON)", "type": "json", "required": True},
+                            {"name": "period", "label": "Period", "type": "string", "required": False}
+                        ]
+                    },
+                    "scenario_analysis": {
+                        "label": "Scenario Analysis",
+                        "params": [
+                            {"name": "base_case", "label": "Base Case (JSON)", "type": "json", "required": True},
+                            {"name": "scenarios", "label": "Scenarios (JSON)", "type": "json", "required": True}
+                        ]
+                    }
                 }
             }
         elif name == "MatchmakingAgent":
             meta[name] = {
                 "display": "Matchmaking",
                 "actions": {
-                    "find_expert": {"label": "Find Expert", "params": [{"name": "topic", "label": "Topic", "type": "text", "required": True}]}
+                    "find_expert": {
+                        "label": "AI Expert Matching",
+                        "params": [
+                            {"name": "topic", "label": "Topic", "type": "text", "required": True},
+                            {"name": "query", "label": "Client Query", "type": "text", "required": False},
+                            {"name": "client_profile", "label": "Client Profile (JSON)", "type": "json", "required": False}
+                        ]
+                    },
+                    "analyze_query": {
+                        "label": "Query Analysis",
+                        "params": [
+                            {"name": "query", "label": "Client Query", "type": "text", "required": True},
+                            {"name": "context", "label": "Context", "type": "text", "required": False}
+                        ]
+                    },
+                    "recommend_services": {
+                        "label": "Service Recommendations",
+                        "params": [
+                            {"name": "client_info", "label": "Client Info (JSON)", "type": "json", "required": True},
+                            {"name": "business_stage", "label": "Business Stage", "type": "string", "required": False}
+                        ]
+                    }
                 }
             }
         elif name == "TaxBot":

@@ -22,8 +22,8 @@ class DocAuditAgent(BaseAgent):
 
         # Configure Gemini API
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
-
+        self.model = genai.GenerativeModel("gemini-2.0-flash")
+    
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executes a document auditing task.

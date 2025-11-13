@@ -160,7 +160,7 @@ class GSTAgent:
         self.gemini_client = None
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
-            self.gemini_client = genai.GenerativeModel("gemini-1.5-flash")
+            self.gemini_client = genai.GenerativeModel("gemini-2.0-flash")
 
     # ---------------- Gemini helpers ----------------
     def _detect_anomalies(self, ledger: str) -> Dict[str, Any]:

@@ -37,7 +37,7 @@ class ComplianceCheckAgent(BaseAgent):
     def __init__(self, gemini_api_key: str):
         super().__init__("ComplianceCheckAgent")
         genai.configure(api_key=gemini_api_key)
-        self.llm = genai.GenerativeModel("gemini-1.5-flash")
+        self.llm = genai.GenerativeModel("gemini-2.0-flash")
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         action = task.get("action")

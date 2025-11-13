@@ -1,22 +1,39 @@
 from .base_agent import BaseAgent
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import csv
 import os
+import json
 from datetime import datetime
 from rapidfuzz import fuzz
 import itertools
 
+# Gemini import
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 
 class ReconAgent(BaseAgent):
     """
-    Accounts reconciliation agent (hardened):
+    AI-enhanced accounts reconciliation agent for Chartered Accountants:
     - Uses fuzzy matching (RapidFuzz) on invoice numbers and details
     - Computes a combined confidence score (invoice_no, details, amount proximity)
     - Proposes ranked candidate matches and supports combined-invoice heuristics
+    - AI-powered insights on discrepancies and reconciliation patterns
     """
 
-    def __init__(self):
+    def __init__(self, gemini_api_key: Optional[str] = None):
         super().__init__("ReconAgent")
+        self.gemini_api_key = gemini_api_key
+        self.gemini_client = None
+        
+        if self.gemini_api_key and genai:
+            try:
+                genai.configure(api_key=self.gemini_api_key)
+                self.gemini_client = genai.GenerativeModel("gemini-2.0-flash")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize Gemini for ReconAgent: {e}")
 
     def execute(self, task: Dict[str, Any]) -> Dict[str, Any]:
         action = task.get("action")
@@ -26,6 +43,10 @@ class ReconAgent(BaseAgent):
             return self._match_payments(params)
         elif action == "summarize_discrepancies":
             return self._summarize_discrepancies(params)
+        elif action == "explain_discrepancies":
+            return self._explain_discrepancies(params)
+        elif action == "reconciliation_insights":
+            return self._reconciliation_insights(params)
         else:
             return {"status": "error", "message": f"Unknown action '{action}' for ReconAgent"}
 
@@ -216,3 +237,135 @@ class ReconAgent(BaseAgent):
     def _summarize_discrepancies(self, params: Dict[str, Any]) -> Dict[str, Any]:
         issues = params.get("issues", [])
         return {"status": "success", "discrepancies": len(issues), "items": issues}
+
+    def _explain_discrepancies(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        AI-powered explanation of reconciliation discrepancies
+        """
+        discrepancies = params.get("discrepancies", [])
+        context = params.get("context", "")
+        
+        if not self.gemini_client:
+            return {
+                "status": "error",
+                "message": "Gemini AI required for discrepancy explanation"
+            }
+        
+        try:
+            prompt = f"""As a Chartered Accountant analyzing reconciliation discrepancies:
+
+Context: {context}
+Discrepancies: {json.dumps(discrepancies, indent=2)}
+
+Provide professional analysis:
+1. Discrepancy Classification:
+   - Timing differences (in-transit items, post-dated)
+   - Errors (data entry, transposition)
+   - Missing entries
+   - Duplicate entries
+   - Amount mismatches
+2. Root Cause Analysis for each discrepancy type
+3. Materiality Assessment:
+   - Significant items requiring immediate attention
+   - Minor items that can be batch processed
+4. Pattern Recognition:
+   - Recurring issues
+   - Systemic problems
+   - One-time anomalies
+5. Financial Impact:
+   - Effect on reported balances
+   - Cash flow implications
+6. Recommended Actions:
+   - Immediate steps
+   - Long-term process improvements
+   - Control enhancements
+7. Documentation Requirements
+8. Sign-off checklist
+
+Format as professional reconciliation discrepancy report."""
+
+            response = self.gemini_client.generate_content(prompt)
+            
+            return {
+                "status": "success",
+                "explanation": response.text.strip(),
+                "discrepancies_count": len(discrepancies),
+                "explained_at": self._get_timestamp()
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Discrepancy explanation failed: {str(e)}"
+            }
+
+    def _reconciliation_insights(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        AI-powered insights on reconciliation patterns and improvements
+        """
+        recon_history = params.get("recon_history", [])
+        current_results = params.get("current_results", {})
+        
+        if not self.gemini_client:
+            return {
+                "status": "error",
+                "message": "Gemini AI required for reconciliation insights"
+            }
+        
+        try:
+            prompt = f"""As a process improvement CA consultant, analyze reconciliation patterns:
+
+Historical Reconciliation Data: {json.dumps(recon_history, indent=2)}
+Current Reconciliation: {json.dumps(current_results, indent=2)}
+
+Provide strategic insights:
+1. Performance Metrics:
+   - Match rate trends
+   - Manual intervention rate
+   - Time to reconcile trends
+   - Error rate patterns
+2. Quality Indicators:
+   - Accuracy improvement/deterioration
+   - Confidence score trends
+   - Exception rate analysis
+3. Process Efficiency:
+   - Bottlenecks identified
+   - Automation opportunities
+   - Resource utilization
+4. Control Environment:
+   - Control weaknesses
+   - Risk areas
+   - Segregation of duties
+5. Technology Recommendations:
+   - System integrations needed
+   - Automation scope
+   - Data quality improvements
+6. Training Needs:
+   - Skill gaps
+   - Common error patterns
+7. Best Practices:
+   - Industry benchmarking
+   - Leading practice adoption
+8. Action Plan:
+   - Priority improvements
+   - Quick wins
+   - Long-term roadmap
+
+Format as professional reconciliation process improvement report."""
+
+            response = self.gemini_client.generate_content(prompt)
+            
+            return {
+                "status": "success",
+                "insights": response.text.strip(),
+                "history_periods": len(recon_history),
+                "generated_at": self._get_timestamp()
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Insights generation failed: {str(e)}"
+            }
+
+    def _get_timestamp(self) -> str:
+        """Return current timestamp in ISO format"""
+        return datetime.utcnow().isoformat() + "Z"

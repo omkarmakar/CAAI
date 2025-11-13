@@ -32,7 +32,7 @@ class InsightBotAgent(BaseAgent):
         super().__init__("InsightBotAgent")
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
-            self.gemini_client = genai.GenerativeModel("gemini-1.5-flash")
+            self.gemini_client = genai.GenerativeModel("gemini-2.0-flash")
         else:
             self.gemini_client = None
 
