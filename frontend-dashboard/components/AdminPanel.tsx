@@ -23,8 +23,17 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [newRole, setNewRole] = useState('');
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [newUser, setNewUser] = useState({
+    username: '',
+    email: '',
+    full_name: '',
+    password: '',
+    role: 'user'
+  });
 
   useEffect(() => {
     loadUsers();
@@ -74,6 +83,34 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     }
   };
 
+  const createUser = async () => {
+    setError(null);
+    setSuccess(null);
+    
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/admin/create-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newUser)
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to create user');
+      }
+
+      setSuccess(`User "${newUser.username}" created successfully!`);
+      setShowCreateUser(false);
+      setNewUser({ username: '', email: '', full_name: '', password: '', role: 'user' });
+      await loadUsers();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const toggleUserStatus = async (userId: number, currentStatus: boolean) => {
     try {
       const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
@@ -89,6 +126,68 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
         throw new Error('Failed to update user status');
       }
 
+      await loadUsers();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const resetUserPassword = async (userId: number, username: string) => {
+    const newPassword = prompt(`Enter new password for ${username}:`);
+    if (!newPassword) return;
+
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: newPassword })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to reset password');
+      }
+
+      setSuccess(`Password reset successfully for ${username}`);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const editUser = async (userId: number, field: string, currentValue: string) => {
+    const newValue = prompt(`Enter new ${field}:`, currentValue);
+    if (!newValue || newValue === currentValue) return;
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ [field]: newValue })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || `Failed to update ${field}`);
+      }
+
+      setSuccess(`${field} updated successfully`);
       await loadUsers();
     } catch (err: any) {
       setError(err.message);
@@ -124,8 +223,105 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg">
-              {error}
+            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex justify-between items-center">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-red-900">×</button>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex justify-between items-center">
+              <span>{success}</span>
+              <button onClick={() => setSuccess(null)} className="text-green-900">×</button>
+            </div>
+          )}
+
+          <div className="mb-4 flex justify-between items-center">
+            <button
+              onClick={() => setShowCreateUser(!showCreateUser)}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            >
+              {showCreateUser ? '✕ Cancel' : '+ Create New User'}
+            </button>
+          </div>
+
+          {showCreateUser && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="font-semibold text-lg mb-4">Create New User</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username*</label>
+                  <input
+                    type="text"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email*</label>
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name*</label>
+                  <input
+                    type="text"
+                    value={newUser.full_name}
+                    onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password*</label>
+                  <input
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
+                    minLength={8}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role*</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
+                  >
+                    <option value="user">User</option>
+                    <option value="ca">CA</option>
+                    <option value="senior_ca">Senior CA</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={createUser}
+                  disabled={!newUser.username || !newUser.email || !newUser.full_name || !newUser.password}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create User
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateUser(false);
+                    setNewUser({ username: '', email: '', full_name: '', password: '', role: 'user' });
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
@@ -162,7 +358,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
                             <select
                               value={newRole}
                               onChange={(e) => setNewRole(e.target.value)}
-                              className="px-2 py-1 border rounded text-sm"
+                              className="px-2 py-1 border rounded text-sm text-gray-900 bg-white"
                             >
                               <option value="">Select...</option>
                               <option value="user">User</option>
@@ -209,15 +405,39 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
                         {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => {
-                            setEditingUser(user.id);
-                            setNewRole(user.role);
-                          }}
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                        >
-                          Change Role
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingUser(user.id);
+                              setNewRole(user.role);
+                            }}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                            title="Change Role"
+                          >
+                            👤
+                          </button>
+                          <button
+                            onClick={() => resetUserPassword(user.id, user.username)}
+                            className="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700"
+                            title="Reset Password"
+                          >
+                            🔑
+                          </button>
+                          <button
+                            onClick={() => editUser(user.id, 'username', user.username)}
+                            className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+                            title="Edit Username"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => editUser(user.id, 'email', user.email)}
+                            className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
+                            title="Edit Email"
+                          >
+                            📧
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -37,7 +37,23 @@ async def register_user(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Register a new user"""
+    """Register a new user - DISABLED: Only admin can create users"""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Public registration is disabled. Contact admin for account creation."
+    )
+    
+    # Old registration code kept for reference but unreachable
+    return None
+
+@router.post("/admin/create-user", response_model=UserResponse)
+async def admin_create_user(
+    user_data: UserRegistration,
+    request: Request,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin: Create a new user with specified role"""
     # Validate password strength
     if not validate_password(user_data.password):
         raise HTTPException(
@@ -58,53 +74,35 @@ async def register_user(
             detail="Email already registered"
         )
     
-    # Create new user
+    # Create new user with role specified in registration data
     hashed_password = hash_password(user_data.password)
     user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
         full_name=user_data.full_name,
-        role=UserRole.USER.value,  # Default role
+        role=user_data.role if hasattr(user_data, 'role') and user_data.role else UserRole.USER.value,
         is_active=True,
-        is_verified=False  # Email verification can be implemented later
+        is_verified=True  # Admin-created users are pre-verified
     )
     
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    # Log registration
-    AuditLogger.log_authentication(
+    # Log user creation by admin
+    AuditLogger.log_action(
         db=db,
-        user_id=user.id,
-        action="user_registration",
-        request=request,
+        user_id=current_user.id,
+        action="admin_create_user",
+        resource=f"user:{user.id}",
+        details=f"Created user: {user.username} ({user.email}) with role: {user.role}",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
         status="success"
     )
     
-    # Create tokens
-    access_token = jwt_manager.create_access_token({"sub": user.id, "username": user.username})
-    refresh_token = jwt_manager.create_refresh_token({"sub": user.id})
-    
-    # Create session
-    session = UserSession(
-        user_id=user.id,
-        session_token=access_token,
-        refresh_token=refresh_token,
-        expires_at=datetime.utcnow() + timedelta(days=7),
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent")
-    )
-    db.add(session)
-    db.commit()
-    
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(user)
-    )
+    return UserResponse.from_orm(user)
 
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
@@ -151,9 +149,9 @@ async def login_user(
     
     # Create tokens
     access_token = jwt_manager.create_access_token(
-        {"sub": user.id, "username": user.username, "role": user.role}
+        {"sub": str(user.id), "username": user.username, "role": user.role}
     )
-    refresh_token = jwt_manager.create_refresh_token({"sub": user.id})
+    refresh_token = jwt_manager.create_refresh_token({"sub": str(user.id)})
     
     # Create session
     session = UserSession(
@@ -221,9 +219,9 @@ async def refresh_token(
     
     # Create new tokens
     access_token = jwt_manager.create_access_token(
-        {"sub": user.id, "username": user.username, "role": user.role}
+        {"sub": str(user.id), "username": user.username, "role": user.role}
     )
-    new_refresh_token = jwt_manager.create_refresh_token({"sub": user.id})
+    new_refresh_token = jwt_manager.create_refresh_token({"sub": str(user.id)})
     
     # Update session
     session.session_token = access_token
@@ -283,8 +281,20 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update current user profile"""
+    """Update current user profile (username, email, full_name)"""
     update_data = user_update.dict(exclude_unset=True)
+    
+    # Check if username is being changed and is unique
+    if "username" in update_data:
+        existing_user = db.query(User).filter(
+            User.username == update_data["username"],
+            User.id != current_user.id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
     
     # Check if email is being changed and is unique
     if "email" in update_data:
@@ -297,6 +307,10 @@ async def update_profile(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already in use"
             )
+    
+    # Users cannot change their own role
+    if "role" in update_data:
+        del update_data["role"]
     
     # Update user
     for field, value in update_data.items():

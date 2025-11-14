@@ -118,3 +118,32 @@ output/
 # Logs
 *.log
 *.log.*
+
+############################
+# Sensitive files
+############################
+# Database files
+backend/auth.db
+backend/*.db
+*.sqlite
+*.sqlite3
+
+# CSV data files (may contain sensitive information)
+backend/ledger.csv
+backend/purchases.csv
+backend/sales.csv
+backend/*.csv
+
+# Backup files
+*.backup
+*.bak
+
+# Test/temporary scripts
+backend/tmp_*.py
+backend/reset_password.py
+backend/update_admin.py
+backend/initialize_system.py
+
+# Authentication secrets
+backend/config.py
+**/credentials.env

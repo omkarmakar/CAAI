@@ -6,6 +6,7 @@ import ExecutionModal from '@/components/ExecutionModal';
 import StatsCards from '@/components/StatsCards';
 import AuthModal from '@/components/AuthModal';
 import AdminPanel from '@/components/AdminPanel';
+import UserSettings from '@/components/UserSettings';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -21,6 +22,7 @@ export default function Home() {
   const [username, setUsername] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showUserSettings, setShowUserSettings] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,8 +107,13 @@ export default function Home() {
         localStorage.setItem('userRole', userData.role);
       }
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
+      console.error('Failed to fetch user profile');
     }
+  };
+
+  const handleUsernameUpdate = (newUsername: string) => {
+    setUsername(newUsername);
+    localStorage.setItem('username', newUsername);
   };
 
   const handleLogout = () => {
@@ -166,12 +173,20 @@ export default function Home() {
                   )}
                 </div>
               )}
-              {userRole === 'admin' && authToken && (
+              {authToken && userRole === 'admin' && (
                 <button
                   onClick={() => setShowAdminPanel(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
                 >
                   👑 Manage Users
+                </button>
+              )}
+              {authToken && (
+                <button
+                  onClick={() => setShowUserSettings(true)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                >
+                  ⚙️ Settings
                 </button>
               )}
               {authToken ? (
@@ -218,12 +233,12 @@ export default function Home() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search agents..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white"
             />
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 text-gray-900 bg-white"
             >
               <option value="all">All Agents</option>
               <option value="active">Active Only</option>
@@ -283,6 +298,15 @@ export default function Home() {
           authToken={authToken}
           apiBaseUrl={API_BASE_URL}
           onClose={() => setShowAdminPanel(false)}
+        />
+      )}
+
+      {showUserSettings && authToken && username && (
+        <UserSettings
+          authToken={authToken}
+          username={username}
+          onClose={() => setShowUserSettings(false)}
+          onUpdate={handleUsernameUpdate}
         />
       )}
     </div>

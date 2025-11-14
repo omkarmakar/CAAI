@@ -9,12 +9,8 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalProps) {
-  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,34 +20,27 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
     setError(null);
 
     try {
-      const endpoint = isLogin ? '/auth/login' : '/auth/register';
-      const body = isLogin 
-        ? { username, password }
-        : { username, email, password, full_name: fullName, role };
-
-      const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      const response = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': isLogin ? 'application/x-www-form-urlencoded' : 'application/json' },
-        body: isLogin 
-          ? new URLSearchParams({ username, password }).toString()
-          : JSON.stringify(body)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Authentication failed');
+        // Handle different error formats
+        const errorMessage = typeof data.detail === 'string' 
+          ? data.detail 
+          : data.detail?.message || data.message || 'Authentication failed';
+        throw new Error(errorMessage);
       }
 
-      if (isLogin) {
-        onSuccess(data.access_token, username);
-      } else {
-        // After registration, automatically login
-        setIsLogin(true);
-        setError('Registration successful! Please login.');
-      }
+      onSuccess(data.access_token, username);
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      // Ensure error message is always a string
+      const errorMessage = err.message || String(err) || 'Authentication failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -62,9 +51,7 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {isLogin ? 'Login' : 'Register'}
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900">Login to CAAI</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
@@ -76,10 +63,14 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className={`p-3 rounded-lg ${error.includes('successful') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            <div className="p-3 rounded-lg bg-red-50 text-red-700">
               {error}
             </div>
           )}
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+            ℹ️ Contact admin (omkarmakar07@gmail.com) for account creation
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -89,44 +80,11 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white"
               required
+              placeholder="Enter your username"
             />
           </div>
-
-          {!isLogin && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                ⚠️ <strong>Note:</strong> New users will have basic access. Contact admin (omkarmakar07@gmail.com) for role upgrade.
-              </div>
-            </>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -136,9 +94,10 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent text-gray-900 bg-white"
               required
               minLength={6}
+              placeholder="Enter your password"
             />
           </div>
 
@@ -150,25 +109,12 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
             {loading ? (
               <div className="flex items-center justify-center gap-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>Processing...</span>
+                <span>Logging in...</span>
               </div>
             ) : (
-              isLogin ? 'Login' : 'Register'
+              'Login'
             )}
           </button>
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError(null);
-              }}
-              className="text-blue-600 hover:text-blue-700 text-sm"
-            >
-              {isLogin ? "Don't have an account? Register" : 'Already have an account? Login'}
-            </button>
-          </div>
         </form>
       </div>
     </div>

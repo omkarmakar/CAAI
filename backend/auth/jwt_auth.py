@@ -53,7 +53,7 @@ class JWTManager:
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except jwt.JWTError:
+        except (jwt.InvalidTokenError, jwt.DecodeError, jwt.InvalidSignatureError) as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
@@ -80,11 +80,20 @@ class AuthMiddleware:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user ID in token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -119,7 +128,7 @@ class AuthMiddleware:
     
     def require_role(self, required_role: UserRole):
         """Dependency to require specific role"""
-        def role_checker(current_user: User = Depends(lambda: AuthMiddleware().get_current_user)) -> User:
+        async def role_checker(current_user: User = Depends(self.get_current_user)) -> User:
             if not current_user.has_role(required_role):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -130,7 +139,7 @@ class AuthMiddleware:
     
     def require_agent_access(self, agent_name: str):
         """Dependency to require agent access"""
-        def agent_access_checker(current_user: User = Depends(lambda: AuthMiddleware().get_current_user)) -> User:
+        async def agent_access_checker(current_user: User = Depends(self.get_current_user)) -> User:
             if not current_user.can_access_agent(agent_name):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
