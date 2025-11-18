@@ -311,9 +311,10 @@ export default function ExecutionModal({ agentName, agentData, onClose, apiBaseU
           <h2 className="text-2xl font-bold text-gray-800">{agentData.display || agentName}</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl w-8 h-8 flex items-center justify-center"
+            className="text-gray-500 hover:text-gray-700 text-3xl w-10 h-10 flex items-center justify-center leading-none hover:bg-gray-100 rounded-full transition"
+            title="Close"
           >
-            
+            ×
           </button>
         </div>
 
@@ -368,7 +369,7 @@ export default function ExecutionModal({ agentName, agentData, onClose, apiBaseU
             </button>
             <button
               onClick={onClose}
-              className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition"
             >
               Cancel
             </button>
