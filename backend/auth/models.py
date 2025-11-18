@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, Column, String, Integer, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
-import hashlib
+import bcrypt
 import secrets
 from enum import Enum
 
@@ -14,6 +14,8 @@ Base = declarative_base()
 
 class UserRole(str, Enum):
     USER = "user"
+    CA = "ca"
+    SENIOR_CA = "senior_ca"
     ADMIN = "admin"
     SUPERADMIN = "superadmin"
 
@@ -42,8 +44,10 @@ class User(Base):
         """Check if user has the required role or higher privileges"""
         role_hierarchy = {
             UserRole.USER: 0,
-            UserRole.ADMIN: 1,
-            UserRole.SUPERADMIN: 2
+            UserRole.CA: 1,
+            UserRole.SENIOR_CA: 2,
+            UserRole.ADMIN: 3,
+            UserRole.SUPERADMIN: 4
         }
         user_level = role_hierarchy.get(UserRole(self.role), 0)
         required_level = role_hierarchy.get(required_role, 0)
@@ -57,10 +61,18 @@ class User(Base):
                 "DocAuditAgent", "BookBotAgent", "InsightBotAgent", 
                 "TaxBot", "GSTAgent"
             ],
-            UserRole.ADMIN: [
+            UserRole.CA: [
                 "DocAuditAgent", "BookBotAgent", "InsightBotAgent", 
-                "TaxBot", "GSTAgent", "ClientCommAgent", "ComplianceCheckAgent"
+                "TaxBot", "GSTAgent", "ClientCommAgent", "ComplianceCheckAgent",
+                "FinModelAgent", "LedgerReconAgent"
             ],
+            UserRole.SENIOR_CA: [
+                "DocAuditAgent", "BookBotAgent", "InsightBotAgent", 
+                "TaxBot", "GSTAgent", "ClientCommAgent", "ComplianceCheckAgent",
+                "FinModelAgent", "LedgerReconAgent", "FraudDetectAgent", 
+                "RegulatoryAgent", "AuditTrailAgent"
+            ],
+            UserRole.ADMIN: ["*"],  # Access to all agents
             UserRole.SUPERADMIN: ["*"]  # Access to all agents
         }
         
@@ -120,18 +132,16 @@ def get_db():
         db.close()
 
 def hash_password(password: str) -> str:
-    """Hash password using SHA-256 with salt"""
-    salt = secrets.token_hex(16)
-    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-    return f"{salt}:{password_hash}"
+    """Hash password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
+    """Verify password against bcrypt hash"""
     try:
-        salt, stored_hash = hashed_password.split(":", 1)
-        password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
-        return password_hash == stored_hash
-    except ValueError:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
         return False
 
 def generate_tokens():

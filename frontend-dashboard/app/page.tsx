@@ -163,6 +163,7 @@ export default function Home() {
                   <span className="text-sm text-gray-700">👤 {username}</span>
                   {userRole && (
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      userRole === 'superadmin' ? 'bg-pink-100 text-pink-700' :
                       userRole === 'admin' ? 'bg-red-100 text-red-700' :
                       userRole === 'senior_ca' ? 'bg-purple-100 text-purple-700' :
                       userRole === 'ca' ? 'bg-blue-100 text-blue-700' :
@@ -173,7 +174,7 @@ export default function Home() {
                   )}
                 </div>
               )}
-              {authToken && userRole === 'admin' && (
+              {authToken && (userRole === 'admin' || userRole === 'superadmin') && (
                 <button
                   onClick={() => setShowAdminPanel(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
@@ -293,7 +294,7 @@ export default function Home() {
         />
       )}
 
-      {showAdminPanel && authToken && userRole === 'admin' && (
+      {showAdminPanel && authToken && (userRole === 'admin' || userRole === 'superadmin') && (
         <AdminPanel
           authToken={authToken}
           apiBaseUrl={API_BASE_URL}

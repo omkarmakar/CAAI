@@ -196,6 +196,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
+      case 'superadmin': return 'bg-pink-100 text-pink-700';
       case 'admin': return 'bg-red-100 text-red-700';
       case 'senior_ca': return 'bg-purple-100 text-purple-700';
       case 'ca': return 'bg-blue-100 text-blue-700';
@@ -301,6 +302,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
                     <option value="ca">CA</option>
                     <option value="senior_ca">Senior CA</option>
                     <option value="admin">Admin</option>
+                    <option value="superadmin">Super Admin</option>
                   </select>
                 </div>
               </div>
@@ -365,6 +367,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
                               <option value="ca">CA</option>
                               <option value="senior_ca">Senior CA</option>
                               <option value="admin">Admin</option>
+                              <option value="superadmin">Super Admin</option>
                             </select>
                             <button
                               onClick={() => updateUserRole(user.id, newRole)}

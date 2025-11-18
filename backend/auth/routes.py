@@ -428,6 +428,18 @@ async def update_user(
             detail="Only superadmin can change user roles"
         )
     
+    # Check if username is being changed and is unique
+    if "username" in update_data:
+        existing_user = db.query(User).filter(
+            User.username == update_data["username"],
+            User.id != user_id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+    
     # Check if email is being changed and is unique
     if "email" in update_data:
         existing_user = db.query(User).filter(
@@ -439,6 +451,11 @@ async def update_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already in use"
             )
+    
+    # Hash password if being changed
+    if "password" in update_data:
+        update_data["hashed_password"] = hash_password(update_data["password"])
+        del update_data["password"]
     
     # Update user
     for field, value in update_data.items():

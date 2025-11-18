@@ -143,7 +143,28 @@ backend/tmp_*.py
 backend/reset_password.py
 backend/update_admin.py
 backend/initialize_system.py
+backend/create_admin.py
+backend/setup_gemini.py
+backend/test_gemini_agents.py
+backend/create_test_users.py
 
 # Authentication secrets
 backend/config.py
 **/credentials.env
+
+# API Keys and secrets
+backend/.env
+.env.local
+
+# Database files (all formats)
+backend/caai_auth.db
+backend/caai_auth.db-journal
+*.db-journal
+
+# Documentation with sensitive info
+backend/SECURITY_NOTICE.md
+backend/GEMINI_INTEGRATION_GUIDE.md
+
+# Setup scripts with hardcoded secrets
+setup_auth.bat
+setup_auth.sh
