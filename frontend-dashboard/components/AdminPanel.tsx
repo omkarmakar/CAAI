@@ -194,6 +194,17 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     }
   };
 
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'superadmin': return 'Super Admin';
+      case 'admin': return 'Admin';
+      case 'senior_ca': return 'Senior CA';
+      case 'ca': return 'CA';
+      case 'user': return 'User';
+      default: return role;
+    }
+  };
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'superadmin': return 'bg-pink-100 text-pink-700';
@@ -388,7 +399,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
                           </div>
                         ) : (
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                            {user.role}
+                            {getRoleLabel(user.role)}
                           </span>
                         )}
                       </td>
