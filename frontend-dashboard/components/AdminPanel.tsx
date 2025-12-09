@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import APIClient from '@/lib/apiClient';
 
 interface User {
   id: number;
@@ -41,17 +42,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
 
   const loadUsers = async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/users`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load users');
-      }
-
-      const data = await response.json();
+      const data = await APIClient.fetchJSON('/auth/users');
       setUsers(data);
     } catch (err: any) {
       setError(err.message);
@@ -62,19 +53,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
 
   const updateUserRole = async (userId: number, role: string) => {
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ role })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update user');
-      }
-
+      await APIClient.put(`/auth/users/${userId}`, { role });
       await loadUsers();
       setEditingUser(null);
       setNewRole('');
@@ -88,24 +67,17 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     setSuccess(null);
     
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/admin/create-user`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newUser)
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to create user');
-      }
-
-      setSuccess(`User "${newUser.username}" created successfully!`);
-      setShowCreateUser(false);
-      setNewUser({ username: '', email: '', full_name: '', password: '', role: 'user' });
+      await APIClient.post('/auth/admin/create-user', newUser);
+      setSuccess('User created successfully!');
       await loadUsers();
+      setShowCreateUser(false);
+      setNewUser({
+        username: '',
+        email: '',
+        full_name: '',
+        password: '',
+        role: 'user'
+      });
     } catch (err: any) {
       setError(err.message);
     }
@@ -113,19 +85,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
 
   const toggleUserStatus = async (userId: number, currentStatus: boolean) => {
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: !currentStatus })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update user status');
-      }
-
+      await APIClient.put(`/auth/users/${userId}`, { is_active: !currentStatus });
       await loadUsers();
     } catch (err: any) {
       setError(err.message);
@@ -145,20 +105,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     setSuccess(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ password: newPassword })
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to reset password');
-      }
-
+      await APIClient.put(`/auth/users/${userId}`, { password: newPassword });
       setSuccess(`Password reset successfully for ${username}`);
     } catch (err: any) {
       setError(err.message);
@@ -173,20 +120,7 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     setSuccess(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ [field]: newValue })
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || `Failed to update ${field}`);
-      }
-
+      await APIClient.put(`/auth/users/${userId}`, { [field]: newValue });
       setSuccess(`${field} updated successfully`);
       await loadUsers();
     } catch (err: any) {
@@ -219,265 +153,205 @@ export default function AdminPanel({ authToken, apiBaseUrl, onClose }: AdminPane
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+        <div className="flex justify-between items-center p-6 border-b">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">👑 Admin Panel</h2>
-            <p className="text-sm text-gray-600">Manage users and their roles</p>
+            <h2 className="text-2xl font-bold text-gray-800">👑 User Management</h2>
+            <p className="text-sm text-gray-600 mt-1">Manage system users and permissions</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+            className="text-gray-500 hover:text-gray-700 text-2xl"
           >
             ×
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex justify-between items-center">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-900">×</button>
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex justify-between items-center">
-              <span>{success}</span>
-              <button onClick={() => setSuccess(null)} className="text-green-900">×</button>
-            </div>
-          )}
-
-          <div className="mb-4 flex justify-between items-center">
-            <button
-              onClick={() => setShowCreateUser(!showCreateUser)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-            >
-              {showCreateUser ? '✕ Cancel' : '+ Create New User'}
-            </button>
+        {/* Messages */}
+        {error && (
+          <div className="mx-6 mt-4 p-3 rounded-lg bg-red-50 text-red-700">
+            {error}
           </div>
+        )}
+        {success && (
+          <div className="mx-6 mt-4 p-3 rounded-lg bg-green-50 text-green-700">
+            {success}
+          </div>
+        )}
 
-          {showCreateUser && (
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="font-semibold text-lg mb-4">Create New User</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username*</label>
-                  <input
-                    type="text"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email*</label>
-                  <input
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name*</label>
-                  <input
-                    type="text"
-                    value={newUser.full_name}
-                    onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password*</label>
-                  <input
-                    type="password"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
-                    minLength={8}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Role*</label>
-                  <select
-                    value={newUser.role}
-                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-gray-900 bg-white"
-                  >
-                    <option value="user">User</option>
-                    <option value="ca">CA</option>
-                    <option value="senior_ca">Senior CA</option>
-                    <option value="admin">Admin</option>
-                    <option value="superadmin">Super Admin</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={createUser}
-                  disabled={!newUser.username || !newUser.email || !newUser.full_name || !newUser.password}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create User
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateUser(false);
-                    setNewUser({ username: '', email: '', full_name: '', password: '', role: 'user' });
-                  }}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
+        {/* Create User Button */}
+        <div className="px-6 py-4 border-b">
+          <button
+            onClick={() => setShowCreateUser(!showCreateUser)}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            {showCreateUser ? '✕ Cancel' : '➕ Create New User'}
+          </button>
+        </div>
+
+        {/* Create User Form */}
+        {showCreateUser && (
+          <div className="px-6 py-4 bg-gray-50 border-b">
+            <h3 className="font-semibold text-gray-800 mb-4">Create New User</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="text"
+                placeholder="Username"
+                value={newUser.username}
+                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                className="px-4 py-2 border rounded-lg text-gray-900 bg-white"
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                className="px-4 py-2 border rounded-lg text-gray-900 bg-white"
+              />
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={newUser.full_name}
+                onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                className="px-4 py-2 border rounded-lg text-gray-900 bg-white"
+              />
+              <input
+                type="password"
+                placeholder="Password (min 8 chars)"
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                className="px-4 py-2 border rounded-lg text-gray-900 bg-white"
+              />
+              <select
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                className="px-4 py-2 border rounded-lg text-gray-900 bg-white"
+              >
+                <option value="user">User</option>
+                <option value="ca">CA</option>
+                <option value="senior_ca">Senior CA</option>
+                <option value="admin">Admin</option>
+                <option value="superadmin">Super Admin</option>
+              </select>
+              <button
+                onClick={createUser}
+                disabled={!newUser.username || !newUser.email || !newUser.password || newUser.password.length < 8}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create User
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
+        {/* Users List */}
+        <div className="overflow-y-auto max-h-[calc(90vh-300px)] p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">User</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Role</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Last Login</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div>
-                          <div className="font-medium text-gray-900">{user.full_name}</div>
-                          <div className="text-sm text-gray-500">@{user.username}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
-                      <td className="px-4 py-3">
-                        {editingUser === user.id ? (
-                          <div className="flex gap-2">
-                            <select
-                              value={newRole}
-                              onChange={(e) => setNewRole(e.target.value)}
-                              className="px-2 py-1 border rounded text-sm text-gray-900 bg-white"
-                            >
-                              <option value="">Select...</option>
-                              <option value="user">User</option>
-                              <option value="ca">CA</option>
-                              <option value="senior_ca">Senior CA</option>
-                              <option value="admin">Admin</option>
-                              <option value="superadmin">Super Admin</option>
-                            </select>
-                            <button
-                              onClick={() => updateUserRole(user.id, newRole)}
-                              className="px-2 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
-                              disabled={!newRole}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingUser(null);
-                                setNewRole('');
-                              }}
-                              className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                            {getRoleLabel(user.role)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => toggleUserStatus(user.id, user.is_active)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            user.is_active 
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                              : 'bg-red-100 text-red-700 hover:bg-red-200'
-                          }`}
-                        >
+            <div className="space-y-4">
+              {users.map((user) => (
+                <div key={user.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-lg text-gray-900">{user.username}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
+                          {getRoleLabel(user.role)}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          user.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
                           {user.is_active ? 'Active' : 'Inactive'}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                      </td>
-                      <td className="px-4 py-3">
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>📧 {user.email}</p>
+                        <p>👤 {user.full_name}</p>
+                        <p>📅 Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                        {user.last_login && (
+                          <p>🔐 Last login: {new Date(user.last_login).toLocaleString()}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {editingUser === user.id ? (
                         <div className="flex gap-2">
+                          <select
+                            value={newRole}
+                            onChange={(e) => setNewRole(e.target.value)}
+                            className="px-3 py-1 border rounded text-sm text-gray-900 bg-white"
+                          >
+                            <option value="">Select Role</option>
+                            <option value="user">User</option>
+                            <option value="ca">CA</option>
+                            <option value="senior_ca">Senior CA</option>
+                            <option value="admin">Admin</option>
+                            <option value="superadmin">Super Admin</option>
+                          </select>
+                          <button
+                            onClick={() => updateUserRole(user.id, newRole)}
+                            disabled={!newRole}
+                            className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingUser(null);
+                              setNewRole('');
+                            }}
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
                           <button
                             onClick={() => {
                               setEditingUser(user.id);
                               setNewRole(user.role);
                             }}
                             className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                            title="Change Role"
                           >
-                            👤
+                            Change Role
+                          </button>
+                          <button
+                            onClick={() => toggleUserStatus(user.id, user.is_active)}
+                            className={`px-3 py-1 rounded text-sm text-white ${
+                              user.is_active ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'
+                            }`}
+                          >
+                            {user.is_active ? 'Deactivate' : 'Activate'}
                           </button>
                           <button
                             onClick={() => resetUserPassword(user.id, user.username)}
-                            className="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700"
-                            title="Reset Password"
-                          >
-                            🔑
-                          </button>
-                          <button
-                            onClick={() => editUser(user.id, 'username', user.username)}
                             className="px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
-                            title="Edit Username"
                           >
-                            ✏️
+                            Reset Password
                           </button>
                           <button
                             onClick={() => editUser(user.id, 'email', user.email)}
-                            className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
-                            title="Edit Email"
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
                           >
-                            📧
+                            Edit Email
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <button
+                            onClick={() => editUser(user.id, 'full_name', user.full_name)}
+                            className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                          >
+                            Edit Name
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-
-          {users.length === 0 && !loading && (
-            <div className="text-center py-20 text-gray-500">
-              No users found
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            Total Users: <span className="font-semibold">{users.length}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import APIClient from '@/lib/apiClient';
 
 interface UserSettingsProps {
   authToken: string;
@@ -42,21 +43,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({ authToken, username, onClos
     setSuccess(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/me`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: newUsername }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update username');
-      }
-
+      await APIClient.put('/auth/me', { username: newUsername });
       setSuccess('Username updated successfully!');
       onUpdate(newUsername);
       setTimeout(() => {
@@ -91,23 +78,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({ authToken, username, onClos
     setLoading(true);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/change-password`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          current_password: currentPassword,
-          new_password: newPassword,
-        }),
+      await APIClient.post('/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to change password');
-      }
 
       setSuccess('Password changed successfully!');
       setCurrentPassword('');

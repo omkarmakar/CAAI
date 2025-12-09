@@ -36,6 +36,11 @@ export default function AuthModal({ onClose, onSuccess, apiBaseUrl }: AuthModalP
         throw new Error(errorMessage);
       }
 
+      // Store refresh token
+      if (data.refresh_token) {
+        localStorage.setItem('refreshToken', data.refresh_token);
+      }
+
       onSuccess(data.access_token, username);
     } catch (err: any) {
       // Ensure error message is always a string

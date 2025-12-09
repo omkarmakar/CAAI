@@ -7,6 +7,7 @@ import StatsCards from '@/components/StatsCards';
 import AuthModal from '@/components/AuthModal';
 import AdminPanel from '@/components/AdminPanel';
 import UserSettings from '@/components/UserSettings';
+import APIClient from '@/lib/apiClient';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -36,9 +37,29 @@ export default function Home() {
       setUserRole(savedRole);
     }
     
+    // Listen for token refresh events
+    const handleTokenRefreshed = (event: any) => {
+      setAuthToken(event.detail.token);
+    };
+    
+    const handleAuthExpired = () => {
+      setAuthToken(null);
+      setUsername(null);
+      setUserRole(null);
+      setShowAuthModal(true);
+    };
+    
+    window.addEventListener('tokenRefreshed', handleTokenRefreshed);
+    window.addEventListener('authExpired', handleAuthExpired);
+    
     loadData();
     const interval = setInterval(checkBackendStatus, 30000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('tokenRefreshed', handleTokenRefreshed);
+      window.removeEventListener('authExpired', handleAuthExpired);
+    };
   }, []);
 
   const checkBackendStatus = async () => {
@@ -98,14 +119,9 @@ export default function Home() {
 
     // Fetch user profile to get role
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const userData = await response.json();
-        setUserRole(userData.role);
-        localStorage.setItem('userRole', userData.role);
-      }
+      const userData = await APIClient.fetchJSON('/auth/me');
+      setUserRole(userData.role);
+      localStorage.setItem('userRole', userData.role);
     } catch (error) {
       console.error('Failed to fetch user profile');
     }
@@ -121,6 +137,7 @@ export default function Home() {
     setUsername(null);
     setUserRole(null);
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('username');
     localStorage.removeItem('userRole');
   };

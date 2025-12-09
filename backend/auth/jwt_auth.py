@@ -11,7 +11,7 @@ import os
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-jwt-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 120  # 2 hours - increased from 30 minutes to reduce token refresh frequency
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 security = HTTPBearer()

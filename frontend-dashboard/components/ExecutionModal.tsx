@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect } from 'react';
+import APIClient from '@/lib/apiClient';
 
 interface ExecutionModalProps {
   agentName: string;
@@ -75,26 +76,13 @@ export default function ExecutionModal({ agentName, agentData, onClose, apiBaseU
     setResult(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/agents/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        },
-        body: JSON.stringify({
-          agent: agentName,
-          action: selectedAction,
-          params: parameters
-        })
+      const data = await APIClient.post('/agents/execute', {
+        agent: agentName,
+        action: selectedAction,
+        params: parameters
       });
-
-      const data = await response.json();
       
-      if (response.ok) {
-        setResult(data);
-      } else {
-        setError(data.detail || 'Execution failed');
-      }
+      setResult(data);
     } catch (err: any) {
       setError(err.message || 'Network error occurred');
     } finally {
