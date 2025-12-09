@@ -70,6 +70,7 @@ def get(key: str, default: Optional[str] = None) -> Optional[str]:
 
 # Common settings (add more as needed)
 GEMINI_API_KEY: str = get("GEMINI_API_KEY", "") or ""
+GEMINI_MODEL: str = get("GEMINI_MODEL", "models/gemini-2.5-flash") or "models/gemini-2.5-flash"  # Default to gemini-2.5-flash
 UVICORN_HOST: str = get("UVICORN_HOST", "0.0.0.0") or "0.0.0.0"
 # keep as int if possible
 try:

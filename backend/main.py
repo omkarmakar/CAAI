@@ -44,6 +44,7 @@ def get_all_agents():
     agents = {}
     # Prefer environment-provided key; fall back to empty string if not set.
     gemini_api_key = config.GEMINI_API_KEY or ""
+    gemini_model = config.GEMINI_MODEL or "gemini-1.5-flash"
     doc_processor = DocumentProcessor()
     agent_pkg = "agents"
     # We'll allow multiple sensible suffixes so new classes like AdvisoryBot or AuditOrchestrator are discovered.
@@ -62,7 +63,7 @@ def get_all_agents():
 
                 try:
                     if attr == "DocAuditAgent":
-                        agents[attr] = agent_cls(doc_processor, gemini_api_key)
+                        agents[attr] = agent_cls(doc_processor, gemini_api_key, gemini_model)
                     elif attr == "ClientCommAgent":
                         agents[attr] = agent_cls(gemini_api_key)
                     elif attr == "BookBotAgent":
